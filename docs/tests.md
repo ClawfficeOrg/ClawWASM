@@ -1,21 +1,37 @@
 # Tests and local wasm run instructions
 
-To build and run the hello-wasm example locally:
+To build and run the hello-wasm example locally (notes to address cross-platform differences):
 
-1. Install Rust and add target:
+1) Check which targets your toolchain supports:
 
-   rustup default stable
+   rustc --print=target-list | grep wasm
+
+2) macOS (Apple Silicon / aarch64):
+
+   - The system Rust toolchain `stable-aarch64-apple-darwin` may not support `wasm32-wasi`.
+   - If `wasm32-wasi` is not listed, consider `wasm32-wasip1` (the newer WASI preview target) or use an x86_64 toolchain via Rosetta.
+
+   Example (add wasm32-wasip1):
+
+   rustup target add wasm32-wasip1
+
+3) Linux / x86_64:
+
+   - `wasm32-wasi` is usually available. Install with:
+
    rustup target add wasm32-wasi
 
-2. Build the example:
+4) Build only the example crate (recommended to avoid workspace resolver / dependency issues):
 
-   cargo build --target wasm32-wasi --release -p hello-wasm
+   cargo build --manifest-path examples/hello-wasm/Cargo.toml --target wasm32-wasi --release
 
-3. Run with WasmEdge CLI (install WasmEdge from https://github.com/WasmEdge/WasmEdge/releases):
+   Or, if you need wasm32-wasip1 for your platform:
 
-   wasmedge target/wasm32-wasi/release/hello-wasm.wasm
+   cargo build --manifest-path examples/hello-wasm/Cargo.toml --target wasm32-wasip1 --release
 
-Or use the provided script:
+Notes on workspace resolver and dependency conflicts
+- If you see a warning about `resolver = "1"` vs `resolver = "2"`, you can either:
+  A) Build the example in isolation using `--manifest-path` (recommended), or
+  B) Set `workspace.resolver = "2"` in the root Cargo.toml to opt into the newer resolver (may affect dependency resolution across the workspace).
 
-   ./scripts/test-wasm.sh
-
+- If building the whole workspace fails (for example, a `godot = "^0.15"` dependency cannot be found), that usually means the examples
