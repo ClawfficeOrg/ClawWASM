@@ -19,13 +19,10 @@ jobs:
           profile: minimal
           override: true
 
-      - name: Install dependencies (WasmEdge)
-        run: |
-          WASMEDGE_VERSION="0.12.2" # conservative default, override as needed
-          curl -fsSL "https://github.com/WasmEdge/WasmEdge/releases/download/${WASMEDGE_VERSION}/WasmEdge-${WASMEDGE_VERSION}-x86_64-linux.tar.gz" -o wasmedge.tar.gz
-          tar xzf wasmedge.tar.gz
-          sudo cp WasmEdge-${WASMEDGE_VERSION}-x86_64-linux/usr/bin/wasmedge /usr/local/bin/wasmedge || true
-          wasmedge --version || true
+      - name: Install WasmEdge (use official setup action)
+        uses: wasmedge/setup-wasmedge@v1
+        with:
+          version: "0.12.2"
 
       - name: Cache cargo target
         uses: actions/cache@v4
