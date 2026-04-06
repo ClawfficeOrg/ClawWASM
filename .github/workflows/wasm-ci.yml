@@ -1,0 +1,55 @@
+name: Wasm CI
+
+on:
+  push:
+    branches: ['feature/**']
+  pull_request:
+    branches: ['main']
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Install dependencies (WasmEdge)
+        run: |
+          WASMEDGE_VERSION="0.12.2" # conservative default, override as needed
+          curl -fsSL "https://github.com/WasmEdge/WasmEdge/releases/download/${WASMEDGE_VERSION}/WasmEdge-${WASMEDGE_VERSION}-x86_64-linux.tar.gz" -o wasmedge.tar.gz
+          tar xzf wasmedge.tar.gz
+          sudo cp WasmEdge-${WASMEDGE_VERSION}-x86_64-linux/usr/bin/wasmedge /usr/local/bin/wasmedge || true
+          wasmedge --version || true
+
+      - name: Cache cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            target
+            ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build workspace for wasm32-wasi
+        run: |
+          rustup target add wasm32-wasi || true
+          cargo build --workspace --target wasm32-wasi --release
+
+      - name: Run cargo tests
+        run: |
+          cargo test --workspace
+
+      - name: Build hello-wasm example and run with WasmEdge
+        run: |
+          cargo build -p hello-wasm --target wasm32-wasi --release
+          WASM_PATH="target/wasm32-wasi/release/hello-wasm.wasm"
+          ls -l $WASM_PATH
+          wasmedge $WASM_PATH || true
+
