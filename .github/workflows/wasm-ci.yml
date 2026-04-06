@@ -19,10 +19,14 @@ jobs:
           profile: minimal
           override: true
 
-      - name: Install WasmEdge (use official setup action)
-        uses: wasmedge/setup-wasmedge@v1
-        with:
-          version: "0.12.2"
+      - name: Install WasmEdge CLI
+        run: |
+          set -e
+          echo "Installing WasmEdge runtime"
+          curl -sSfL https://github.com/WasmEdge/WasmEdge/releases/download/1.0.3/wasmedge-ubuntu.tar.gz | tar xz -C /tmp
+          sudo cp /tmp/wasmedge-*/bin/wasmedge /usr/local/bin/ || true
+          sudo cp -r /tmp/wasmedge-*/lib/* /usr/local/lib/ || true
+          wasmedge --version || true
 
       - name: Cache cargo target
         uses: actions/cache@v4
