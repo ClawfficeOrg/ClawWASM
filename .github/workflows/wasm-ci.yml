@@ -1,0 +1,56 @@
+name: Wasm CI
+
+on:
+  push:
+    branches: ['feature/**']
+  pull_request:
+    branches: ['main']
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Install WasmEdge CLI
+        run: |
+          set -e
+          echo "Installing WasmEdge 0.14.1"
+          WASMEDGE_VERSION="0.14.1"
+          TARBALL="WasmEdge-${WASMEDGE_VERSION}-ubuntu20.04_x86_64.tar.gz"
+          curl -sSfL "https://github.com/WasmEdge/WasmEdge/releases/download/${WASMEDGE_VERSION}/${TARBALL}" \
+            -o /tmp/wasmedge.tar.gz
+          tar xz -C /tmp -f /tmp/wasmedge.tar.gz
+          sudo cp /tmp/WasmEdge-${WASMEDGE_VERSION}-Linux/bin/wasmedge /usr/local/bin/
+          sudo cp -r /tmp/WasmEdge-${WASMEDGE_VERSION}-Linux/lib/* /usr/local/lib/
+          sudo ldconfig
+          wasmedge --version
+
+      - name: Cache cargo target
+        uses: actions/cache@v4
+        with:
+          path: |
+            target
+            ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run cargo tests (native)
+        run: |
+          cargo test --manifest-path examples/hello-wasm/Cargo.toml
+
+      - name: Build hello-wasm example for wasm32-wasi
+        run: |
+          cargo build --manifest-path examples/hello-wasm/Cargo.toml --target wasm32-wasip1 --release
+
+      - name: Run hello-wasm with WasmEdge
+        run: |
+          WASM_PATH="examples/hello-wasm/target/wasm32-wasip1/release/hello-wasm.wasm"
+          ls -lh "$WASM_PATH"
+          wasmedge "$WASM_PATH"

@@ -6,7 +6,7 @@ This TODO organizes work into semver-mapped phases with tasks, estimates, depend
 
 Tasks:
 - Tooling & CI
-  - Add cargo target and build script for wasm32-unknown-unknown. (Est: 2d)
+  - Add cargo target and build script for wasm32-wasi (not wasm32-unknown-unknown). Use wasm32-wasi for WasmEdge compatibility. (Est: 2d)
   - Add Github Actions: build for debug/release, wasm-opt step, run basic checks. (Est: 2d)
   - Recommended agent: gpt-5-mini (docs & CI), sonnet (review)
   - Dependencies: none

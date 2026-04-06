@@ -15,6 +15,7 @@ This document defines coding standards, testing practices, CI checklist, release
 
 ## WasmEdge and wasm32-wasi best practices
 - Build target: wasm32-wasi for WasmEdge compatibility. Example build command: `cargo build --target wasm32-wasi --release`.
+- Note on WASI variants: there are multiple WASI target triples (wasm32-wasi, wasm32-wasip1, wasm32-unknown-unknown). For WasmEdge prefer `wasm32-wasi`. `wasm32-wasip1` targets the newer preview1 ABI and may require different host support; only use it if your runtime and toolchain explicitly support wasip1. Avoid `wasm32-unknown-unknown` for WASI-based programs — it's for non-WASI raw Wasm.
 - Optimize for size: enable LTO and strip symbols for release Wasm builds. Example: set in Cargo.toml profiles or build with:
   - `RUSTFLAGS='-C link-arg=-s' cargo build --target wasm32-wasi --release`
   - Consider using `-C opt-level=z` for size-sensitive modules
