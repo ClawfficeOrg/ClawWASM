@@ -15,7 +15,7 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-wasi
+          targets: wasm32-wasip1
 
       - name: Install WasmEdge CLI
         run: |
@@ -47,10 +47,10 @@ jobs:
 
       - name: Build hello-wasm example for wasm32-wasi
         run: |
-          cargo build --manifest-path examples/hello-wasm/Cargo.toml --target wasm32-wasi --release
+          cargo build --manifest-path examples/hello-wasm/Cargo.toml --target wasm32-wasip1 --release
 
       - name: Run hello-wasm with WasmEdge
         run: |
-          WASM_PATH="examples/hello-wasm/target/wasm32-wasi/release/hello-wasm.wasm"
+          WASM_PATH="examples/hello-wasm/target/wasm32-wasip1/release/hello-wasm.wasm"
           ls -lh "$WASM_PATH"
           wasmedge "$WASM_PATH"
