@@ -3,4 +3,8 @@ name = "hello-wasm"
 version = "0.1.0"
 edition = "2021"
 
+# Exclude from root workspace (root workspace has unrelated deps that can't
+# cross-compile; build this crate in isolation via --manifest-path)
+[workspace]
+
 [dependencies]
