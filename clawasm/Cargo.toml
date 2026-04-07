@@ -7,5 +7,8 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-godot = { version = "0.15", features = ["v4"] }
+# godot-rust v0.5 is the current Godot 4 binding crate (crate was at 0.15 conceptually in docs but
+# published to crates.io under 0.x versioning). "v4" feature no longer exists in 0.5+; Godot 4
+# is the only target.
+godot = "0.5"
 wasmedge-sys = "0.17.0"
