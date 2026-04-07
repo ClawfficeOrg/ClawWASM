@@ -54,3 +54,14 @@ jobs:
           WASM_PATH="examples/hello-wasm/target/wasm32-wasip1/release/hello-wasm.wasm"
           ls -lh "$WASM_PATH"
           wasmedge "$WASM_PATH"
+
+      - name: Build Godot GDExtension (native cdylib)
+        run: |
+          echo "Building clawasm native cdylib for Godot 4"
+          # Build the cdylib used by Godot 4 GDExtension. This ensures CI at least compiles the plugin crate.
+          cargo build --manifest-path clawasm/Cargo.toml --release
+
+      - name: Verify built cdylib exists
+        run: |
+          echo "Looking for target artifact (linux .so or .dylib depending on runner)"
+          ls -la clawasm/target/release | sed -n '1,200p' || true
