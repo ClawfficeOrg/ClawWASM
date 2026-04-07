@@ -1,3 +1,8 @@
+// FIXME(arch-review): This file uses the `gdnative` crate API (Godot 3 bindings),
+// but Cargo.toml declares `godot = "0.15"` which is the godot-rust crate for Godot 4.
+// These APIs are incompatible — this crate will NOT compile until migrated to the
+// godot-rust 0.x (Godot 4) API. See: https://godot-rust.github.io/book/
+// Tracked: replace gdnative::* usages with godot::prelude::* and GodotClass derive.
 use gdnative::prelude::*;
 
 #[derive(NativeClass)]

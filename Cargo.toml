@@ -1,2 +1,3 @@
 [workspace]
 members = ["clawasm"]
+resolver = "2"
