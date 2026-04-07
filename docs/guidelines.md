@@ -91,7 +91,41 @@ Integration / E2E tests
 - WasmEdge CLI for runtime testing
 - Optionally wasmprinter/wasm-tools for inspection
 
-## Appendix: Example CI snippet (GitHub Actions)
+## Godot 4 Migration (godot-rust v0.5 / April 2026)
+
+The `clawasm` crate has been migrated from `gdnative` (Godot 3) to the `godot` crate (godot-rust v0.5, Godot 4).
+
+### What changed
+- `clawasm/Cargo.toml`: dependency changed from `gdnative` to `godot = "0.5"` (the v4-only crate).
+- `clawasm/src/lib.rs`: rewrote bindings using godot-rust 0.5 API:
+  - `#[derive(NativeClass)]` → `#[derive(GodotClass)]`
+  - `#[inherit(Node)]` → `#[class(base=Node)]`
+  - `#[gdnative::methods]` → `#[godot_api] impl INode for ClawWasm`
+  - `fn new(_owner)` → `fn init(base: Base<Node>) -> Self`
+  - `fn _ready(&self, owner)` → `fn ready(&mut self)`
+  - `godot_init!()` → removed; auto-registered via `#[derive(GodotClass)]`
+  - Added `ExtensionLibrary` entry point required by Godot 4 GDExtension API
+
+### Build commands (Godot 4)
+
+```bash
+# Native cdylib (GDExtension for Godot 4)
+cargo build --manifest-path clawasm/Cargo.toml --release
+```
+
+> **Note:** `wasmedge-sys` requires the WasmEdge C library to be installed on the host.
+> See https://wasmedge.org/book/en/embed/rust.html for installation.
+> Without it, the build will fail at the `wasmedge-sys` crate — the godot bindings
+> themselves compile cleanly.
+
+### Remaining TODOs
+- Wire WASMEdge runtime calls inside the `ready()` method (see FIXMEs in lib.rs).
+- Add a `.gdextension` file to the Godot project pointing to the compiled `.so`/`.dll`.
+- Remove the old GDNativeLibrary / `.gdns` resources from any Godot 3 project files.
+- Install WasmEdge in CI to unblock the full build (see CI appendix below).
+
+---
+
 ```yaml
 name: CI
 on: [push, pull_request]
