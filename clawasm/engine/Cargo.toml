@@ -1,0 +1,20 @@
+[package]
+name = "clawasm-engine"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "engine"
+path = "src/lib.rs"
+
+[features]
+with-wasmedge = ["wasmedge-sys"]
+
+auto-default = []
+
+[dependencies]
+anyhow = "1.0"
+
+[dependencies.wasmedge-sys]
+version = "0.4"
+optional = true
