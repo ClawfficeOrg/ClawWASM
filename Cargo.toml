@@ -1,2 +1,2 @@
 [workspace]
-members = ["clawasm"]
+members = ["clawasm","clawasm/engine"]
