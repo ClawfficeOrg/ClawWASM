@@ -11,6 +11,12 @@
 // See: https://godot-rust.github.io/book/godot-api/builtins.html
 use godot::prelude::*;
 
+/// Entry point — godot-rust v0.15 registers this automatically via the derive macro.
+struct ClawWasmExtension;
+
+#[gdextension]
+unsafe impl ExtensionLibrary for ClawWasmExtension {}
+
 /// A simple Godot 4 Node that initialises WASMEdge.
 ///
 /// FIXME: Deep WASMEdge integration (wasmedge-sys calls) lives outside this Node for now.
