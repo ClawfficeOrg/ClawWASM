@@ -4,11 +4,11 @@ on:
   push:
     branches:
       - main
-      - 'feature/**'
-      - 'fix/**'
-      - 'chore/**'
-      - 'docs/**'
-      - 'refactor/**'
+      - "feature/**"
+      - "fix/**"
+      - "chore/**"
+      - "docs/**"
+      - "refactor/**"
   pull_request:
     branches: [main]
 
@@ -48,6 +48,20 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: ${{ runner.os }}-cargo-clippy-
+      # `clawasm` (the Godot host crate) currently depends on `wasmedge-sys`
+      # directly (non-optional), so even host-side clippy needs libwasmedge
+      # available. Tracked in ralph/PLAN.md to make this dep optional and
+      # routed through `clawasm-engine` in a follow-up.
+      - name: Install WasmEdge ${{ env.WASMEDGE_VERSION }}
+        run: |
+          set -e
+          curl -sSfL https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh \
+            | bash -s -- --version=${WASMEDGE_VERSION} --path=$HOME/.wasmedge
+          echo "$HOME/.wasmedge/bin" >> $GITHUB_PATH
+          echo "LD_LIBRARY_PATH=$HOME/.wasmedge/lib:${LD_LIBRARY_PATH:-}" >> $GITHUB_ENV
+          echo "WASMEDGE_DIR=$HOME/.wasmedge" >> $GITHUB_ENV
+          echo "WASMEDGE_INCLUDE_DIR=$HOME/.wasmedge/include" >> $GITHUB_ENV
+          echo "WASMEDGE_LIB_DIR=$HOME/.wasmedge/lib" >> $GITHUB_ENV
       # clippy on the host workspace (clawasm + clawasm-engine in stub mode).
       # The wasm-only `examples/hello-wasm` has its own workspace and is
       # exercised by the `wasm-smoke` job.
@@ -72,11 +86,24 @@ jobs:
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: ${{ runner.os }}-cargo-test-
       # Stub-mode test of clawasm-engine (no native WasmEdge required).
-      # `clawasm` itself depends on godot/wasmedge-sys natively; we let it
-      # `cargo check` here and defer full Godot-runtime tests to a future
-      # headless-Godot job (see ralph/PLAN.md).
       - run: cargo test -p clawasm-engine --no-default-features
-      - run: cargo check -p clawasm
+      # `cargo check -p clawasm` requires libwasmedge today (non-optional dep).
+      # Install on Linux only; defer macOS host check to a future job once we
+      # decide on a macOS WasmEdge install path. See ralph/PLAN.md.
+      - name: Install WasmEdge ${{ env.WASMEDGE_VERSION }} (linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          set -e
+          curl -sSfL https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh \
+            | bash -s -- --version=${WASMEDGE_VERSION} --path=$HOME/.wasmedge
+          echo "$HOME/.wasmedge/bin" >> $GITHUB_PATH
+          echo "LD_LIBRARY_PATH=$HOME/.wasmedge/lib:${LD_LIBRARY_PATH:-}" >> $GITHUB_ENV
+          echo "WASMEDGE_DIR=$HOME/.wasmedge" >> $GITHUB_ENV
+          echo "WASMEDGE_INCLUDE_DIR=$HOME/.wasmedge/include" >> $GITHUB_ENV
+          echo "WASMEDGE_LIB_DIR=$HOME/.wasmedge/lib" >> $GITHUB_ENV
+      - name: cargo check -p clawasm (linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: cargo check -p clawasm
 
   wasm-smoke:
     name: wasm32-wasip1 smoke (WasmEdge)
@@ -97,13 +124,14 @@ jobs:
       - name: Install WasmEdge ${{ env.WASMEDGE_VERSION }}
         run: |
           set -e
-          TARBALL="WasmEdge-${WASMEDGE_VERSION}-ubuntu20.04_x86_64.tar.gz"
-          curl -sSfL "https://github.com/WasmEdge/WasmEdge/releases/download/${WASMEDGE_VERSION}/${TARBALL}" -o /tmp/wasmedge.tar.gz
-          tar xz -C /tmp -f /tmp/wasmedge.tar.gz
-          sudo cp /tmp/WasmEdge-${WASMEDGE_VERSION}-Linux/bin/wasmedge /usr/local/bin/
-          sudo cp -r /tmp/WasmEdge-${WASMEDGE_VERSION}-Linux/lib/* /usr/local/lib/
-          sudo ldconfig
-          wasmedge --version
+          curl -sSfL https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh \
+            | bash -s -- --version=${WASMEDGE_VERSION} --path=$HOME/.wasmedge
+          echo "$HOME/.wasmedge/bin" >> $GITHUB_PATH
+          echo "LD_LIBRARY_PATH=$HOME/.wasmedge/lib:${LD_LIBRARY_PATH:-}" >> $GITHUB_ENV
+          echo "WASMEDGE_DIR=$HOME/.wasmedge" >> $GITHUB_ENV
+          echo "WASMEDGE_INCLUDE_DIR=$HOME/.wasmedge/include" >> $GITHUB_ENV
+          echo "WASMEDGE_LIB_DIR=$HOME/.wasmedge/lib" >> $GITHUB_ENV
+          $HOME/.wasmedge/bin/wasmedge --version
       - name: Build hello-wasm (wasm32-wasip1, release)
         run: cargo build --manifest-path examples/hello-wasm/Cargo.toml --target wasm32-wasip1 --release
       - name: Run hello-wasm under WasmEdge
@@ -131,12 +159,13 @@ jobs:
       - name: Install WasmEdge ${{ env.WASMEDGE_VERSION }}
         run: |
           set -e
-          TARBALL="WasmEdge-${WASMEDGE_VERSION}-ubuntu20.04_x86_64.tar.gz"
-          curl -sSfL "https://github.com/WasmEdge/WasmEdge/releases/download/${WASMEDGE_VERSION}/${TARBALL}" -o /tmp/wasmedge.tar.gz
-          tar xz -C /tmp -f /tmp/wasmedge.tar.gz
-          sudo cp /tmp/WasmEdge-${WASMEDGE_VERSION}-Linux/bin/wasmedge /usr/local/bin/
-          sudo cp -r /tmp/WasmEdge-${WASMEDGE_VERSION}-Linux/lib/* /usr/local/lib/
-          sudo ldconfig
+          curl -sSfL https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh \
+            | bash -s -- --version=${WASMEDGE_VERSION} --path=$HOME/.wasmedge
+          echo "$HOME/.wasmedge/bin" >> $GITHUB_PATH
+          echo "LD_LIBRARY_PATH=$HOME/.wasmedge/lib:${LD_LIBRARY_PATH:-}" >> $GITHUB_ENV
+          echo "WASMEDGE_DIR=$HOME/.wasmedge" >> $GITHUB_ENV
+          echo "WASMEDGE_INCLUDE_DIR=$HOME/.wasmedge/include" >> $GITHUB_ENV
+          echo "WASMEDGE_LIB_DIR=$HOME/.wasmedge/lib" >> $GITHUB_ENV
       - run: cargo test -p clawasm-engine --features with-wasmedge
 
   conventional-commits:
