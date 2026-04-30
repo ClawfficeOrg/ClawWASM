@@ -6,9 +6,17 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+# Forward to the engine crate. Default is stub-mode (no native libwasmedge
+# required) so `cargo check -p clawasm` works on a clean machine.
+default = []
+with-wasmedge = ["clawasm-engine/with-wasmedge"]
+
 [dependencies]
-# godot-rust v0.5 is the current Godot 4 binding crate (crate was at 0.15 conceptually in docs but
-# published to crates.io under 0.x versioning). "v4" feature no longer exists in 0.5+; Godot 4
-# is the only target.
+# godot-rust v0.5 is the current Godot 4 binding crate.
 godot = "0.5"
-wasmedge-sys = "0.17.0"
+
+# All WasmEdge access goes through `clawasm-engine`. The engine crate
+# feature-gates `wasmedge-sys` behind `with-wasmedge`, so the host plugin
+# builds in stub mode without libwasmedge installed.
+clawasm-engine = { path = "engine", default-features = false }

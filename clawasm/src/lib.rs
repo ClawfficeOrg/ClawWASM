@@ -1,4 +1,4 @@
-// Migrated from gdnative (Godot 3) to godot-rust v0.15 (Godot 4).
+// Migrated from gdnative (Godot 3) to godot-rust 0.5 (Godot 4).
 // Key API changes:
 //   - `use gdnative::prelude::*`       → `use godot::prelude::*`
 //   - `#[derive(NativeClass)]`         → `#[derive(GodotClass)]`
@@ -6,9 +6,10 @@
 //   - `#[gdnative::methods]`           → `#[godot_api]` + `impl INode for ClawWasm`
 //   - `fn new(_owner: &Node) -> Self`  → `fn init(base: Base<Node>) -> Self`
 //   - `fn _ready(&self, owner: &Node)` → `fn ready(&mut self)` inside `impl INode`
-//   - `godot_init!(init)`              → auto-registered via `#[derive(GodotClass)]`
+//   - `godot_init!(init)`              → auto-registered via `#[gdextension]` on
+//                                       `ClawWasmExtension` + `#[derive(GodotClass)]`.
 //
-// See: https://godot-rust.github.io/book/godot-api/builtins.html
+// See: https://godot-rust.github.io/book/
 use godot::prelude::*;
 
 /// Entry point — godot-rust v0.15 registers this automatically via the derive macro.
@@ -37,15 +38,8 @@ impl INode for ClawWasm {
     /// Called when the node enters the scene tree for the first time.
     fn ready(&mut self) {
         godot_print!("ClawWASM: ClawWasm node is ready (Godot 4).");
-        // FIXME: Initialize WASMEdge runtime here.
-        // Example (stubbed — requires wasmedge-sys feature-gating for non-wasm targets):
-        //   let vm = wasmedge_sys::Vm::new(None).expect("WasmEdge VM init failed");
-        //   godot_print!("ClawWASM: WasmEdge VM initialised.");
+        // Engine integration is delegated to `clawasm-engine` (feature-gated
+        // behind `with-wasmedge`). Wiring a `ClawEngine` Godot node that
+        // exposes register/start/stop is tracked in `ralph/PLAN.md`.
     }
 }
-
-fn init(handle: InitHandle) {
-    handle.add_class::<ClawWasm>();
-}
-
-godot_init!(init);

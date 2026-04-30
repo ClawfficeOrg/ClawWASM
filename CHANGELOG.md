@@ -27,7 +27,16 @@ project follows [Semantic Versioning](https://semver.org/).
   Release with CHANGELOG-derived notes.
 
 ### Changed
-- (none — scaffolding only.)
+- **`clawasm` host crate** no longer depends on `wasmedge-sys` directly.
+  All WasmEdge usage is routed through the `clawasm-engine` path dependency,
+  which feature-gates `wasmedge-sys` behind `with-wasmedge`. The plugin now
+  builds and lints in stub mode (`cargo check -p clawasm`,
+  `cargo clippy --workspace`) on a clean machine without libwasmedge
+  installed. The `clawasm/with-wasmedge` feature forwards to
+  `clawasm-engine/with-wasmedge` for the native path.
+- **CI** — restored `cargo clippy --workspace --all-targets -- -D warnings`
+  and `cargo check -p clawasm` in the host jobs (previously scoped narrower
+  while the dep mismatch was being resolved).
 
 ### Repo housekeeping
 - Pruned all merged feature branches; `main` is the single source of truth.
