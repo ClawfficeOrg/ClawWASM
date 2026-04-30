@@ -50,3 +50,10 @@ use through `clawasm-engine` (feature-gated) and drop the direct dep
 from `clawasm`. Until that PR lands, scaffolding-CI scopes
 `cargo clippy` to `-p clawasm-engine --no-default-features` and skips
 host-side `cargo check -p clawasm`. PR #9.
+
+**Resolved (PR #10):** Option (c) — `clawasm` no longer depends on
+`wasmedge-sys` directly; the engine wrapper crate owns the native dep,
+and the host plugin gets a stub-mode `cargo check` for free. `clawasm`
+exposes a forwarding `with-wasmedge` feature that pulls
+`clawasm-engine/with-wasmedge` for callers that want the native path.
+CI restored `cargo clippy --workspace` and `cargo check -p clawasm`.

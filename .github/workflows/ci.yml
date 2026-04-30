@@ -48,13 +48,11 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: ${{ runner.os }}-cargo-clippy-
-      # Scope: lint the host-side, no-WasmEdge crates (`clawasm-engine` in stub
-      # mode). The `clawasm` Godot host crate currently pins `wasmedge-sys =
-      # "0.17"` against WasmEdge 0.14.1 headers, which is ABI-incompatible.
-      # Fixing that pin (or routing all WasmEdge use through `clawasm-engine`)
-      # is part of the v0.2.0 engine-MVP work tracked in `ralph/PLAN.md`.
-      # Until then, full-workspace clippy is deferred to that PR.
-      - run: cargo clippy -p clawasm-engine --all-targets --no-default-features -- -D warnings
+      # Lint the host workspace (`clawasm` + `clawasm-engine`) in stub mode.
+      # The wasm-only `examples/hello-wasm` has its own workspace and is
+      # exercised by the `wasm-smoke` job. The `with-wasmedge` feature is
+      # exercised separately by `engine-with-wasmedge` below.
+      - run: cargo clippy --workspace --all-targets -- -D warnings
 
   test:
     name: cargo test (${{ matrix.os }})
@@ -74,10 +72,9 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: ${{ runner.os }}-cargo-test-
-      # Stub-mode test of clawasm-engine (no native WasmEdge required).
-      # Host-side `clawasm` build/test is deferred until the engine-MVP PR
-      # fixes the `wasmedge-sys` version pin (see ralph/PLAN.md).
+      # Stub-mode tests/checks for the host workspace (no native WasmEdge).
       - run: cargo test -p clawasm-engine --no-default-features
+      - run: cargo check -p clawasm
 
   wasm-smoke:
     name: wasm32-wasip1 smoke (WasmEdge)
