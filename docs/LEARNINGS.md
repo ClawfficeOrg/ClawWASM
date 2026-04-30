@@ -36,3 +36,17 @@ pruned along with `feature/docs-quickstart` (a stale fork that would have
 reverted later work). Always check `git log origin/main..origin/<branch>`
 before deleting; deleting a branch that's only an ancestor of `main` is
 safe.
+
+### 2026-04-30 — `wasmedge-sys 0.17.5` is ABI-incompatible with WasmEdge 0.14.1
+
+Wiring CI to actually compile `clawasm` (the Godot host crate) against
+libwasmedge surfaced ~38 type errors in `wasmedge-sys 0.17.5/src/types.rs`
+(`WasmEdge_ValType` is a struct in 0.14.1 headers but the bindings expect
+an integer-like enum). The 0.17.x line targets newer WasmEdge releases.
+Resolution options for the engine-MVP PR: (a) downgrade `wasmedge-sys`
+to a 0.1x version compatible with WasmEdge 0.14.1, (b) bump the WasmEdge
+pin to a release the 0.17.x bindings support, or (c) route all WasmEdge
+use through `clawasm-engine` (feature-gated) and drop the direct dep
+from `clawasm`. Until that PR lands, scaffolding-CI scopes
+`cargo clippy` to `-p clawasm-engine --no-default-features` and skips
+host-side `cargo check -p clawasm`. PR #9.

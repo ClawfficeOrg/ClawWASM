@@ -27,6 +27,13 @@ v0.2.0 = "engine MVP can load + run a wasip1 module from disk under WasmEdge".
 
 ## Up next (ordered)
 
+- [ ] **Fix `clawasm` host-crate `wasmedge-sys` pin** — the current
+      `wasmedge-sys = "0.17"` does not compile against WasmEdge 0.14.1
+      headers (see `docs/LEARNINGS.md` 2026-04-30). Pick one: downgrade
+      to a 0.1x line compatible with 0.14.1, bump the WasmEdge install
+      pin, or remove the direct dep and route WasmEdge use only through
+      `clawasm-engine`. Re-enable `cargo clippy --workspace` and
+      `cargo check -p clawasm` in CI once green.
 - [ ] **`clawasm/engine`: implement `Instance::run` with WasmEdge VmBuilder**
       — replace the `bail!` stub, hook stdout capture, return real `Output`.
       Files: `clawasm/engine/src/lib.rs`. Tests: extend the feature-gated
