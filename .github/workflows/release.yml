@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
 
 permissions:
   contents: write
@@ -62,11 +62,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      # NOTE: clawasm depends on `wasmedge-sys` natively; on non-Linux this
-      # build may fail until we feature-gate that dep. The release continues
-      # via `continue-on-error` so the wasm artifact still ships.
+      # `clawasm` no longer depends on `wasmedge-sys` directly (PR #10);
+      # all WasmEdge usage is routed through `clawasm-engine` and gated
+      # behind the optional `with-wasmedge` feature. The default release
+      # build needs no native WasmEdge install on any platform.
       - name: Build clawasm (release)
-        continue-on-error: true
         run: cargo build -p clawasm --release
       - name: Stage artifact
         if: hashFiles(format('target/release/{0}', matrix.artifact_name)) != ''
