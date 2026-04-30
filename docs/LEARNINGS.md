@@ -84,3 +84,15 @@ Wiring `ClawEngine` exposed two godot-rust 0.5 quirks:
 `From<&String>` and `From<&str>`. Construct via `GString::from(&s)` for
 owned strings. Catching this at compile time saved a confusing runtime
 signal panic later. Surface in any future Rust→GDScript glue.
+
+### 2026-04-30 — `sh -c "single-cmd"` forks on Linux, execs on macOS
+
+The `Runner::stop` test was green on macOS and red on Linux. Cause:
+`sh -c "sleep 30"` — macOS's `/bin/sh` recognises the single-command
+pattern and `exec`s into `sleep`, so killing the shell PID kills the
+only process. Linux's `bash` always forks `sleep` as a child; killing
+the shell PID leaves `sleep` orphaned holding the stdout pipe's write
+end open, which deadlocks the reader threads and the test times out at
+30s. Fix: invoke `sleep` directly (`Command::new("sleep")`). General
+lesson: when a test relies on `Child::kill()` semantics, never wrap
+the command in a shell unless you explicitly `exec` inside it. PR #12.

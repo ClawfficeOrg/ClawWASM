@@ -232,9 +232,15 @@ mod tests {
 
     #[test]
     fn stop_kills_long_running_process() {
-        let mut cmd = Command::new("sh");
-        cmd.arg("-c").arg("sleep 30");
-        let mut runner = Runner::spawn(cmd).expect("spawn sh");
+        // Invoke `sleep` directly. Going via `sh -c "sleep 30"` on
+        // Linux forks `sleep` as a child of the shell; killing the
+        // shell's PID can leave `sleep` orphaned holding the stdout
+        // pipe open, which deadlocks the reader threads. macOS's
+        // /bin/sh happens to optimise this into an exec, so the test
+        // passed there. Going direct sidesteps the difference.
+        let mut cmd = Command::new("sleep");
+        cmd.arg("30");
+        let mut runner = Runner::spawn(cmd).expect("spawn sleep");
         assert!(runner.is_running());
         runner.stop();
 
