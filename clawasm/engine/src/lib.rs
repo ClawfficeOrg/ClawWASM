@@ -20,9 +20,10 @@ impl Engine {
         // If wasmedge feature is enabled, attempt to construct a real Vm.
         #[cfg(feature = "with-wasmedge")]
         {
-            use wasmedge_sys::{Vm};
+            use wasmedge_sys::Vm;
             // Safe attempt — map errors to anyhow::Error
-            let _ = Vm::new(None).map_err(|e| anyhow::anyhow!("WasmEdge VM init failed: {:?}", e))?;
+            let _ =
+                Vm::new(None).map_err(|e| anyhow::anyhow!("WasmEdge VM init failed: {:?}", e))?;
         }
 
         #[cfg(not(feature = "with-wasmedge"))]
@@ -50,7 +51,9 @@ impl Instance {
         #[cfg(feature = "with-wasmedge")]
         {
             // Minimal example using wasmedge-sys. Real code would configure wasi args and run _start/_initialize.
-            return Err(anyhow::anyhow!("with-wasmedge run path not implemented in this minimal PR"));
+            return Err(anyhow::anyhow!(
+                "with-wasmedge run path not implemented in this minimal PR"
+            ));
         }
 
         #[cfg(not(feature = "with-wasmedge"))]

@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  WASMEDGE_VERSION: "0.14.1"
+
+jobs:
+  build-wasm:
+    name: Build hello-wasm (wasm32-wasip1, release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+      - run: cargo build --manifest-path examples/hello-wasm/Cargo.toml --target wasm32-wasip1 --release
+      - name: Install wasm-opt
+        run: |
+          BIN=binaryen-version_117-x86_64-linux
+          curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/version_117/${BIN}.tar.gz" -o /tmp/binaryen.tar.gz
+          tar xz -C /tmp -f /tmp/binaryen.tar.gz
+          sudo cp "/tmp/${BIN}/bin/wasm-opt" /usr/local/bin/
+          wasm-opt --version
+      - name: Optimize wasm (-Oz)
+        run: |
+          IN=examples/hello-wasm/target/wasm32-wasip1/release/hello-wasm.wasm
+          OUT=hello-wasm.opt.wasm
+          wasm-opt -Oz -o "$OUT" "$IN"
+          ls -lh "$IN" "$OUT"
+          sha256sum "$OUT" > "$OUT.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hello-wasm
+          path: |
+            hello-wasm.opt.wasm
+            hello-wasm.opt.wasm.sha256
+
+  build-native:
+    name: Build clawasm cdylib (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: libclawasm.so
+            asset_suffix: linux-x86_64
+          - os: macos-latest
+            artifact_name: libclawasm.dylib
+            asset_suffix: macos-aarch64
+          - os: windows-latest
+            artifact_name: clawasm.dll
+            asset_suffix: windows-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # NOTE: clawasm depends on `wasmedge-sys` natively; on non-Linux this
+      # build may fail until we feature-gate that dep. The release continues
+      # via `continue-on-error` so the wasm artifact still ships.
+      - name: Build clawasm (release)
+        continue-on-error: true
+        run: cargo build -p clawasm --release
+      - name: Stage artifact
+        if: hashFiles(format('target/release/{0}', matrix.artifact_name)) != ''
+        shell: bash
+        run: |
+          OUT="clawasm-${GITHUB_REF_NAME}-${{ matrix.asset_suffix }}-${{ matrix.artifact_name }}"
+          cp "target/release/${{ matrix.artifact_name }}" "$OUT"
+          if command -v sha256sum >/dev/null; then sha256sum "$OUT" > "$OUT.sha256"; else shasum -a 256 "$OUT" > "$OUT.sha256"; fi
+          ls -lh "$OUT" "$OUT.sha256"
+      - uses: actions/upload-artifact@v4
+        if: hashFiles(format('clawasm-{0}-{1}-{2}', github.ref_name, matrix.asset_suffix, matrix.artifact_name)) != ''
+        with:
+          name: clawasm-${{ matrix.asset_suffix }}
+          path: |
+            clawasm-*-${{ matrix.artifact_name }}
+            clawasm-*-${{ matrix.artifact_name }}.sha256
+
+  release:
+    name: GitHub Release
+    needs: [build-wasm, build-native]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find dist -type f -exec cp {} release/ \;
+          ls -lh release/
+      - name: Extract CHANGELOG section
+        id: changelog
+        run: |
+          set -e
+          TAG="${GITHUB_REF_NAME}"           # e.g. v0.2.0
+          VER="${TAG#v}"
+          # Pull the section between "## [vX.Y.Z]" and the next "## " heading.
+          awk -v v="$TAG" '
+            $0 ~ "^## \\[" v "\\]" { flag=1; print; next }
+            flag && /^## / { exit }
+            flag { print }
+          ' CHANGELOG.md > release-notes.md || true
+          if [ ! -s release-notes.md ]; then
+            echo "Release ${TAG}" > release-notes.md
+          fi
+          echo "notes_file=release-notes.md" >> "$GITHUB_OUTPUT"
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          body_path: ${{ steps.changelog.outputs.notes_file }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: release/*
