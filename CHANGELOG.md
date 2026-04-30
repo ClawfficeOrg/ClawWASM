@@ -19,6 +19,20 @@ autonomous-agent substrate (AGENTS.md, Superpowers skills, Ralph loop)
 and the full CI/CD pipeline.
 
 ### Added
+- **`ClawEngine` Godot 4 node** (`clawasm/src/engine_node.rs`). Drop into
+  any scene; exposes `register_module(path)`, `set_wasmedge_binary(path)`,
+  `start(args)`, `stop()`, `is_running()`, and `module_path()` to
+  GDScript. Emits `stdout_line(line)`, `stderr_line(line)`, `finished(code)`,
+  and `failed(message)` signals. Accepts `res://` and `user://` paths in
+  addition to filesystem paths (resolved via `ProjectSettings.globalize_path`).
+- **`clawasm_engine::stream` module** with `Runner` / `Event` types that
+  spawn a subprocess with piped stdout/stderr and ferry output line-by-line
+  through an mpsc channel. `Instance::stream(args)` is the new streaming
+  counterpart of `Instance::run` and is what `ClawEngine` uses on each
+  `_process` tick. `Finished`/`Failed` events are guaranteed to arrive
+  after every line of output. Five new unit tests cover line streaming,
+  ordering, kill-on-`stop()`, and missing-binary handling.
+
 - **`clawasm-engine` v0.2.0 MVP.** Real `Instance::run` implementation
   (subprocess to the `wasmedge` CLI) with stdout / stderr / exit-code
   capture. New public surface: `Engine::with_binary`, `Engine::probe`,

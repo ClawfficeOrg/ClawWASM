@@ -1,63 +1,65 @@
-# Ralph Plan — 2026-04-30
+# Ralph Plan — 2026-05-01
 
 ## North star
 
 Make `clawasm-engine` real enough that the Godot plugin can run a wasm
-module end-to-end. v0.2.0 = "engine MVP can load + run a wasip1 module
-from disk under WasmEdge". v0.2.0 engine is shipping in PR #11
-(subprocess-to-`wasmedge` implementation); v0.3.0 wires it into Godot
-and revisits in-process embedding.
+module end-to-end. v0.2.0 = engine MVP (subprocess, shipped in PR #11).
+v0.3.0 = `ClawEngine` Godot node streams stdout/stderr to GDScript via
+signals (in flight, this iteration). v0.4.0+ = revisit in-process
+WasmEdge embedding once bindings stabilise.
 
 ## Active task
 
-### Expose `Engine` to Godot via a `ClawEngine` node
+### Land the `ClawEngine` node + Godot smoke runbook (PR open)
 
-With the engine MVP shipped (PR #11), the next bite is wiring it into
-Godot so a `.gd` script can `register_module()` / `start()` / `stop()`
-a wasm module and receive `stdout_line` signals.
-
-- **Files:** new `clawasm/src/engine_node.rs`, edit `clawasm/src/lib.rs`.
-- **Tests:** unit tests for the pure-Rust glue (path resolution, signal
-  payloads). Manual Godot smoke deferred to `tests/godot-smoke/`.
-- **Acceptance:**
-  - `cargo check -p clawasm` and `cargo clippy --workspace` green.
-  - A scripted Godot scene can attach a `ClawEngine` node, point it at
-    `hello-wasm.wasm`, and receive at least one `stdout_line` signal.
+- **Files added/edited:**
+  - `clawasm/engine/src/stream.rs` — new streaming `Runner` / `Event`.
+  - `clawasm/engine/src/lib.rs` — `Instance::stream(args)` helper.
+  - `clawasm/src/engine_node.rs` — `ClawEngine` Godot node.
+  - `clawasm/src/lib.rs` — re-export `ClawEngine`.
+  - `clawasm.gdextension` — gdextension manifest.
+  - `tests/godot-smoke/{README.md,main.gd}` — manual runbook.
+  - `CHANGELOG.md`, `docs/LEARNINGS.md` — entries for the above.
+- **Tests:** `cargo test -p clawasm-engine --no-default-features` covers
+  the streaming runner end-to-end against `sh`. `cargo clippy --workspace`
+  green. Godot-side smoke is documented but manual.
+- **Acceptance:** ✅ Workspace builds in stub mode, ✅ engine streams
+  stdout lines + exit code, ✅ `ClawEngine` compiles against
+  `godot-rust 0.5`, ⏳ manual Godot smoke (operator).
 
 ## Up next (ordered)
 
-- [ ] **Add `clawasm.gdextension` manifest + Godot smoke project skeleton**
-      — under `tests/godot-smoke/`. Document load steps in
-      `.superpowers/skills/godot-binding.md`. No CI runner yet.
+- [ ] **Cut v0.2.0** — bump `clawasm-engine` to 0.2.0 (already), bump
+      `clawasm` to 0.2.0, finalize `CHANGELOG.md` Unreleased → v0.2.0,
+      tag, run `release.yml`. See `.superpowers/skills/release-engineering.md`.
+- [ ] **Run the manual Godot smoke** on macOS + Linux and capture
+      results in `docs/LEARNINGS.md`. If green on both, document the
+      v0.3.0 release.
 - [ ] **Move from subprocess to in-process WasmEdge embedding** — once a
       `wasmedge-sys` (or alternative binding) version compatible with
       our pinned WasmEdge release exists, swap the body of
-      `Instance::run` without changing the public API. Track stdout via
-      a pipe-redirect trick or a custom WASI host.
-- [ ] **Release v0.2.0** — bump versions, CHANGELOG, tag. See
-      `.superpowers/skills/release-engineering.md`.
+      `Instance::run` and `Instance::stream` without changing the
+      public API.
 
 ## Done this iteration block
 
 - [x] feat(repo): add superpowers skills, Ralph loop, agents contract, CI/CD scaffolding (PR #9)
-- [x] fix(clawasm): drop direct `wasmedge-sys` dep; route through `clawasm-engine`
-      path dep; restore workspace clippy + `cargo check -p clawasm` in CI (PR #10)
-- [x] feat(engine): v0.2.0 MVP — `Instance::run` shells out to the `wasmedge`
-      CLI; full unit-test suite + feature-gated `hello-wasm` integration test;
-      `engine-with-wasmedge` CI job promoted from `continue-on-error` to required (PR #11)
+- [x] fix(clawasm): drop direct `wasmedge-sys` dep; route through `clawasm-engine` (PR #10)
+- [x] feat(engine): v0.2.0 MVP — subprocess `Instance::run` (PR #11)
+- [x] feat(godot): `ClawEngine` node + streaming `Runner` + smoke runbook (this PR)
 
 ## Open questions
 
-- **Q1:** ~~Do we want the `with-wasmedge` CI job to be `continue-on-error: true`
-  for the first month?~~ Resolved in PR #11: now required.
-- **Q2:** Headless Godot smoke: GH Actions has a `godotengine/godot` container,
-  but extension loading on Linux without a display server has been flaky.
-  *Default: defer to v0.3.0; ship manual smoke instructions for v0.2.0.*
-- **Q3 (new):** Subprocess vs in-process embedding — for v0.2.0 we ship
-  subprocess. The Godot integration will need to surface partial stdout
-  (line-by-line signals) which is awkward over `Command::output()`. Plan
-  is to use `Stdio::piped()` and a reader thread inside `ClawEngine` for
-  v0.3.0 streaming, then revisit in-process when bindings stabilise.
+- **Q1:** ~~Do we want the `with-wasmedge` CI job to be `continue-on-error`?~~
+  Resolved in PR #11: now required.
+- **Q2:** Headless Godot smoke in CI — still deferred. Manual runbook
+  lives at `tests/godot-smoke/README.md` for v0.2.0/v0.3.0.
+- **Q3:** ~~Subprocess vs in-process embedding for streaming.~~ Resolved
+  in this PR: streaming `Runner` uses piped subprocess + reader threads;
+  public API stays stable for an in-process swap-in later.
+- **Q4 (new):** When/how do we publish a pre-built `addons/clawasm/`
+  bundle with the cdylib + manifest so users don't need a Rust toolchain?
+  Probably part of `release.yml` once v0.2.0 ships.
 
 ## Archive
 

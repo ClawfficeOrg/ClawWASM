@@ -74,3 +74,13 @@ that ships a CLI, public API stays stable for an in-process swap-in.
 Cons: per-invocation process-launch overhead, no fine-grained host
 function injection. Tracked as a v0.3.0+ follow-up in `ralph/PLAN.md`
 (Q3). PR #11.
+
+### 2026-05-01 — `godot-rust` v0.5 signal emit takes `&GString`, not `GString`
+
+Wiring `ClawEngine` exposed two godot-rust 0.5 quirks:
+(1) `signals().<name>().emit(...)` takes its arguments by reference
+(`&GString`, `i64`), not by value, so signal payloads must be borrowed.
+(2) `GString: From<String>` is *not* implemented — only
+`From<&String>` and `From<&str>`. Construct via `GString::from(&s)` for
+owned strings. Catching this at compile time saved a confusing runtime
+signal panic later. Surface in any future Rust→GDScript glue.

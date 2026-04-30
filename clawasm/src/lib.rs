@@ -12,6 +12,9 @@
 // See: https://godot-rust.github.io/book/
 use godot::prelude::*;
 
+mod engine_node;
+pub use engine_node::ClawEngine;
+
 /// Entry point — godot-rust v0.15 registers this automatically via the derive macro.
 struct ClawWasmExtension;
 
@@ -38,8 +41,8 @@ impl INode for ClawWasm {
     /// Called when the node enters the scene tree for the first time.
     fn ready(&mut self) {
         godot_print!("ClawWASM: ClawWasm node is ready (Godot 4).");
-        // Engine integration is delegated to `clawasm-engine` (feature-gated
-        // behind `with-wasmedge`). Wiring a `ClawEngine` Godot node that
-        // exposes register/start/stop is tracked in `ralph/PLAN.md`.
+        // The actual wasm execution lives on the `ClawEngine` node
+        // (see `engine_node.rs`), which can be added to a scene
+        // independently of this top-level entry point.
     }
 }
