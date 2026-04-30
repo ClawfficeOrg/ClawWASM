@@ -57,3 +57,20 @@ and the host plugin gets a stub-mode `cargo check` for free. `clawasm`
 exposes a forwarding `with-wasmedge` feature that pulls
 `clawasm-engine/with-wasmedge` for callers that want the native path.
 CI restored `cargo clippy --workspace` and `cargo check -p clawasm`.
+
+### 2026-04-30 — Engine v0.2.0 ships subprocess to `wasmedge`, not in-process embedding
+
+`wasmedge-sys 0.4.x` (which `clawasm-engine` originally pinned) and
+`0.17.x` are both ABI-incompatible with the WasmEdge 0.14.1 release
+we install in CI — 0.4.x references removed `WasmEdge_ImportObject*`
+and `WasmEdge_HostRegistration_WasmEdge_Process` symbols; 0.17.x
+expects the newer `WasmEdge_ValType` ABI. Rather than blocking the
+engine MVP on finding a binding version that lines up (or bumping
+the WasmEdge install pin and re-validating downstream), v0.2.0
+implements `Instance::run` by `Command`-ing the `wasmedge` CLI
+binary that we already install for the wasm-smoke job. Pros: zero
+native build deps for consumers, works against any WasmEdge release
+that ships a CLI, public API stays stable for an in-process swap-in.
+Cons: per-invocation process-launch overhead, no fine-grained host
+function injection. Tracked as a v0.3.0+ follow-up in `ralph/PLAN.md`
+(Q3). PR #11.

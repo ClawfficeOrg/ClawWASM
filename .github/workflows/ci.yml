@@ -108,23 +108,25 @@ jobs:
       - name: Run hello-wasm under WasmEdge
         run: bash scripts/test-wasm.sh
 
-  # Optional: full clawasm-engine test against a real WasmEdge install.
-  # Currently `continue-on-error` while the engine integration is being
-  # implemented (see ralph/PLAN.md "Up next"). Promote to a required check
-  # once the engine has been green for two consecutive weeks.
+  # Full clawasm-engine test against a real WasmEdge install. Builds the
+  # `examples/hello-wasm` artifact first, then runs the feature-gated
+  # integration test that loads it and asserts the output. Required since
+  # the v0.2.0 engine MVP shipped (subprocess-based runner).
   engine-with-wasmedge:
     name: clawasm-engine (with-wasmedge)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
       - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
+            examples/hello-wasm/target
           key: ${{ runner.os }}-cargo-engine-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: ${{ runner.os }}-cargo-engine-
       - name: Install WasmEdge ${{ env.WASMEDGE_VERSION }}
@@ -137,6 +139,8 @@ jobs:
           echo "WASMEDGE_DIR=$HOME/.wasmedge" >> $GITHUB_ENV
           echo "WASMEDGE_INCLUDE_DIR=$HOME/.wasmedge/include" >> $GITHUB_ENV
           echo "WASMEDGE_LIB_DIR=$HOME/.wasmedge/lib" >> $GITHUB_ENV
+      - name: Build hello-wasm artifact (needed by integration smoke)
+        run: cargo build --manifest-path examples/hello-wasm/Cargo.toml --target wasm32-wasip1 --release
       - run: cargo test -p clawasm-engine --features with-wasmedge
 
   conventional-commits:

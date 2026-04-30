@@ -7,6 +7,24 @@ project follows [Semantic Versioning](https://semver.org/).
 ## Unreleased
 
 ### Added
+- **`clawasm-engine` v0.2.0 MVP.** Real `Instance::run` implementation
+  (subprocess to the `wasmedge` CLI) with stdout / stderr / exit-code
+  capture. New public surface: `Engine::with_binary`, `Engine::probe`,
+  `Engine::binary`, `Instance::module_path`, `Output::success`,
+  `Output::stderr`. `Engine::load` now also rejects empty files and
+  takes `impl AsRef<Path>` instead of `&str`.
+- **`WASMEDGE_BIN` environment variable** — lets callers point at a
+  non-PATH WasmEdge install (e.g. `$HOME/.wasmedge/bin/wasmedge`,
+  which is where the official installer lands).
+- **`clawasm-engine` CLI** — `cargo run -p clawasm-engine -- <module.wasm> [args...]`
+  is now a thin wrapper that exercises the same code path Godot uses.
+- **6 unit tests** for env override, path validation, probe error
+  reporting, and the `Output::success` helper. No external deps.
+- **Feature-gated integration test** (`clawasm/engine/tests/smoke.rs`,
+  behind `with-wasmedge`) loads `examples/hello-wasm` under WasmEdge
+  and asserts `success() && stdout.contains("hello")`.
+- **Engine README** rewritten with usage, configuration, testing, and
+  install instructions.
 - **Autonomous-development substrate.** Added `AGENTS.md` (binding contract
   for all AI coding agents), six "always-on" superpowers skills under
   `.superpowers/skills/` (TDD, writing-plans, PR-review, memory-keeper,
