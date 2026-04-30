@@ -43,3 +43,9 @@ impl INode for ClawWasm {
         //   godot_print!("ClawWASM: WasmEdge VM initialised.");
     }
 }
+
+fn init(handle: InitHandle) {
+    handle.add_class::<ClawWasm>();
+}
+
+godot_init!(init);
