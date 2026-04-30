@@ -1,0 +1,43 @@
+name: Bug report
+description: Something is broken.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing! Please check `docs/MEMORY.md` and `docs/LEARNINGS.md` first — your issue may already be a known constraint.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: A clear description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: |
+        Minimal steps. Include `rustc --version`, target triple, OS, and (if
+        relevant) the WasmEdge version.
+      render: bash
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ClawWASM version / commit
+      placeholder: "v0.1.0 or commit sha"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      render: shell

@@ -1,0 +1,162 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+      - 'fix/**'
+      - 'chore/**'
+      - 'docs/**'
+      - 'refactor/**'
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+  WASMEDGE_VERSION: "0.14.1"
+
+jobs:
+  fmt:
+    name: cargo fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: cargo clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-cargo-clippy-
+      # clippy on the host workspace (clawasm + clawasm-engine in stub mode).
+      # The wasm-only `examples/hello-wasm` has its own workspace and is
+      # exercised by the `wasm-smoke` job.
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    name: cargo test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-cargo-test-
+      # Stub-mode test of clawasm-engine (no native WasmEdge required).
+      # `clawasm` itself depends on godot/wasmedge-sys natively; we let it
+      # `cargo check` here and defer full Godot-runtime tests to a future
+      # headless-Godot job (see ralph/PLAN.md).
+      - run: cargo test -p clawasm-engine --no-default-features
+      - run: cargo check -p clawasm
+
+  wasm-smoke:
+    name: wasm32-wasip1 smoke (WasmEdge)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            examples/hello-wasm/target
+          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('examples/hello-wasm/Cargo.lock', 'examples/hello-wasm/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-cargo-wasm-
+      - name: Install WasmEdge ${{ env.WASMEDGE_VERSION }}
+        run: |
+          set -e
+          TARBALL="WasmEdge-${WASMEDGE_VERSION}-ubuntu20.04_x86_64.tar.gz"
+          curl -sSfL "https://github.com/WasmEdge/WasmEdge/releases/download/${WASMEDGE_VERSION}/${TARBALL}" -o /tmp/wasmedge.tar.gz
+          tar xz -C /tmp -f /tmp/wasmedge.tar.gz
+          sudo cp /tmp/WasmEdge-${WASMEDGE_VERSION}-Linux/bin/wasmedge /usr/local/bin/
+          sudo cp -r /tmp/WasmEdge-${WASMEDGE_VERSION}-Linux/lib/* /usr/local/lib/
+          sudo ldconfig
+          wasmedge --version
+      - name: Build hello-wasm (wasm32-wasip1, release)
+        run: cargo build --manifest-path examples/hello-wasm/Cargo.toml --target wasm32-wasip1 --release
+      - name: Run hello-wasm under WasmEdge
+        run: bash scripts/test-wasm.sh
+
+  # Optional: full clawasm-engine test against a real WasmEdge install.
+  # Currently `continue-on-error` while the engine integration is being
+  # implemented (see ralph/PLAN.md "Up next"). Promote to a required check
+  # once the engine has been green for two consecutive weeks.
+  engine-with-wasmedge:
+    name: clawasm-engine (with-wasmedge)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-engine-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-cargo-engine-
+      - name: Install WasmEdge ${{ env.WASMEDGE_VERSION }}
+        run: |
+          set -e
+          TARBALL="WasmEdge-${WASMEDGE_VERSION}-ubuntu20.04_x86_64.tar.gz"
+          curl -sSfL "https://github.com/WasmEdge/WasmEdge/releases/download/${WASMEDGE_VERSION}/${TARBALL}" -o /tmp/wasmedge.tar.gz
+          tar xz -C /tmp -f /tmp/wasmedge.tar.gz
+          sudo cp /tmp/WasmEdge-${WASMEDGE_VERSION}-Linux/bin/wasmedge /usr/local/bin/
+          sudo cp -r /tmp/WasmEdge-${WASMEDGE_VERSION}-Linux/lib/* /usr/local/lib/
+          sudo ldconfig
+      - run: cargo test -p clawasm-engine --features with-wasmedge
+
+  conventional-commits:
+    name: PR title is Conventional Commit
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            chore
+            ci
+            build
+            refactor
+            test
+            perf
+            style
+            revert
