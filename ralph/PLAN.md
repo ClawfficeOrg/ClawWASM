@@ -7,7 +7,7 @@ module end-to-end. v0.2.0 = engine MVP (subprocess, shipped in PR #11).
 v0.3.0 = `ClawEngine` Godot node streams stdout/stderr to GDScript via
 signals (in flight, this iteration). v0.4.0+ = revisit in-process
 WasmEdge embedding once bindings stabilise.
-
+eventually run llm inference and tools like ironclaw in godot wasmedge
 ## Active task
 
 ### Land the `ClawEngine` node + Godot smoke runbook (PR open)
