@@ -6,6 +6,15 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+_(Nothing yet.)_
+
+## [v0.3.0] - 2026-05-06
+
+`ClawEngine` Godot 4 node: drop it into any scene and stream stdout/stderr
+from a WasmEdge subprocess directly into GDScript signals. Zero native
+WasmEdge build dependency — the cdylib still builds with `cargo check` on
+a clean machine. Smoke-tested headlessly on macOS arm64.
+
 ### Added
 - **`ClawEngine` Godot 4 node** (`clawasm/src/engine_node.rs`). Drop into
   any scene; exposes `register_module(path)`, `set_wasmedge_binary(path)`,
@@ -13,21 +22,20 @@ project follows [Semantic Versioning](https://semver.org/).
   Emits `stdout_line(line)`, `stderr_line(line)`, `finished(code)`, and
   `failed(message)` signals. Accepts `res://` and `user://` paths
   (resolved via `ProjectSettings.globalize_path`).
-- **`clawasm_engine::stream` module** — `Runner` / `Event` types that spawn
-  a subprocess with piped stdout/stderr and ferry output line-by-line through
-  an mpsc channel. `Instance::stream(args)` is the streaming counterpart of
-  `Instance::run`. `Finished`/`Failed` events are guaranteed after every line.
+- **`clawasm_engine::stream` module** — `Runner` / `Event` types spawn a
+  subprocess with piped stdout/stderr and ferry output line-by-line through
+  an mpsc channel. `Instance::stream(args)` is the new streaming API;
+  `Finished`/`Failed` events are guaranteed to arrive after all output lines.
   Five unit tests cover streaming, ordering, kill-on-`stop()`, and
   missing-binary handling.
-- **Godot smoke-test scaffold** (`tests/godot-smoke/`): `project.godot`,
-  `main.tscn`, `main.gd` reference script, and a full headless runbook
-  in `README.md`. Verified GREEN on macOS arm64 (Godot 4.6.2, WasmEdge
-  0.14.1, godot-rust 0.5.2). Linux run pending.
+- **Godot smoke-test scaffold** (`tests/godot-smoke/project.godot`,
+  `main.tscn`, `main.gd`) with a full headless runbook. Verified GREEN on
+  macOS arm64 (Godot 4.6.2, WasmEdge 0.14.1, godot-rust 0.5.2).
 
-### Changed
-- **`tests/godot-smoke/README.md`** — headless steps now documented;
-  macOS+Homebrew `rustc` caveat and `.godot/extension_list.cfg` requirement
-  recorded. See `docs/LEARNINGS.md` 2026-05-06.
+### Fixed
+- `Runner::stop` test: replaced `sh -c "sleep 30"` with `Command::new("sleep")`
+  to avoid Linux bash forking a child that outlives the killed shell PID,
+  which previously caused a 30-second deadlock on CI.
 
 ## [v0.2.0] - 2026-04-30
 
@@ -120,5 +128,6 @@ Initial developer release. Snapshot before the Godot 4 migration.
 - CI hardening: WasmEdge tarball install pinned, `wasm32-wasip1` target,
   isolated `examples/hello-wasm` build via `--manifest-path` (#5).
 
+[v0.3.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.3.0
 [v0.2.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.2.0
 [v0.1.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.1.0
