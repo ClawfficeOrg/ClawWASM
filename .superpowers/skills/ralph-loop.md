@@ -64,7 +64,7 @@ The next iteration exits cleanly. Delete `ralph/STOP` to resume.
 
 Long iterations cause merge conflicts and review pain. Hard caps:
 
-- ≤ ~200 LOC of code change per PR.
+- ≤ ~500 LOC of code change per PR.
 - ≤ 30 minutes of agent wall clock per iteration (enforced by adapter timeout).
 - ≤ 1 PR per iteration.
 

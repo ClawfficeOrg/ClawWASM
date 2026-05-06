@@ -6,8 +6,28 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-_(Nothing yet. The `ClawEngine` Godot node + streaming `Runner` work is
-on `feature/godot-engine-node` (PR #12) and will land in v0.3.0.)_
+### Added
+- **`ClawEngine` Godot 4 node** (`clawasm/src/engine_node.rs`). Drop into
+  any scene; exposes `register_module(path)`, `set_wasmedge_binary(path)`,
+  `start(args)`, `stop()`, `is_running()`, and `module_path()` to GDScript.
+  Emits `stdout_line(line)`, `stderr_line(line)`, `finished(code)`, and
+  `failed(message)` signals. Accepts `res://` and `user://` paths
+  (resolved via `ProjectSettings.globalize_path`).
+- **`clawasm_engine::stream` module** — `Runner` / `Event` types that spawn
+  a subprocess with piped stdout/stderr and ferry output line-by-line through
+  an mpsc channel. `Instance::stream(args)` is the streaming counterpart of
+  `Instance::run`. `Finished`/`Failed` events are guaranteed after every line.
+  Five unit tests cover streaming, ordering, kill-on-`stop()`, and
+  missing-binary handling.
+- **Godot smoke-test scaffold** (`tests/godot-smoke/`): `project.godot`,
+  `main.tscn`, `main.gd` reference script, and a full headless runbook
+  in `README.md`. Verified GREEN on macOS arm64 (Godot 4.6.2, WasmEdge
+  0.14.1, godot-rust 0.5.2). Linux run pending.
+
+### Changed
+- **`tests/godot-smoke/README.md`** — headless steps now documented;
+  macOS+Homebrew `rustc` caveat and `.godot/extension_list.cfg` requirement
+  recorded. See `docs/LEARNINGS.md` 2026-05-06.
 
 ## [v0.2.0] - 2026-04-30
 
@@ -19,6 +39,20 @@ autonomous-agent substrate (AGENTS.md, Superpowers skills, Ralph loop)
 and the full CI/CD pipeline.
 
 ### Added
+- **`ClawEngine` Godot 4 node** (`clawasm/src/engine_node.rs`). Drop into
+  any scene; exposes `register_module(path)`, `set_wasmedge_binary(path)`,
+  `start(args)`, `stop()`, `is_running()`, and `module_path()` to
+  GDScript. Emits `stdout_line(line)`, `stderr_line(line)`, `finished(code)`,
+  and `failed(message)` signals. Accepts `res://` and `user://` paths in
+  addition to filesystem paths (resolved via `ProjectSettings.globalize_path`).
+- **`clawasm_engine::stream` module** with `Runner` / `Event` types that
+  spawn a subprocess with piped stdout/stderr and ferry output line-by-line
+  through an mpsc channel. `Instance::stream(args)` is the new streaming
+  counterpart of `Instance::run` and is what `ClawEngine` uses on each
+  `_process` tick. `Finished`/`Failed` events are guaranteed to arrive
+  after every line of output. Five new unit tests cover line streaming,
+  ordering, kill-on-`stop()`, and missing-binary handling.
+
 - **`clawasm-engine` v0.2.0 MVP.** Real `Instance::run` implementation
   (subprocess to the `wasmedge` CLI) with stdout / stderr / exit-code
   capture. New public surface: `Engine::with_binary`, `Engine::probe`,

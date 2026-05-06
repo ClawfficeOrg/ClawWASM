@@ -1,0 +1,21 @@
+; ClawWASM Godot 4 extension manifest.
+;
+; Drop the built `libclawasm.{dylib,so,dll}` into your Godot project and
+; reference this file from the editor (Project > Project Settings > Plugins
+; or by adding `clawasm.gdextension` to `res://`). Godot 4.2+ is required.
+;
+; The artefacts referenced by the `linux.*`, `macos.*`, `windows.*` keys
+; are produced by `cargo build -p clawasm --release`. Adjust the paths to
+; wherever you copy them inside your Godot project.
+
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = "4.2"
+
+[libraries]
+linux.debug.x86_64   = "res://addons/clawasm/libclawasm.so"
+linux.release.x86_64 = "res://addons/clawasm/libclawasm.so"
+macos.debug          = "res://addons/clawasm/libclawasm.dylib"
+macos.release        = "res://addons/clawasm/libclawasm.dylib"
+windows.debug.x86_64 = "res://addons/clawasm/clawasm.dll"
+windows.release.x86_64 = "res://addons/clawasm/clawasm.dll"

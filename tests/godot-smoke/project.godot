@@ -1,0 +1,16 @@
+; Engine configuration file.
+; Minimal Godot 4.2+ project for the ClawEngine smoke test.
+; See README.md for setup instructions.
+
+config_version=5
+
+[application]
+
+config/name="clawasm-smoke"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.2")
+
+[display]
+
+window/size/viewport_width=800
+window/size/viewport_height=600

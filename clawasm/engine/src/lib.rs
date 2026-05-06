@@ -33,6 +33,9 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+pub mod stream;
+pub use stream::{Event, Runner};
+
 /// Default name of the WasmEdge CLI we shell out to. Overridable via
 /// the `WASMEDGE_BIN` environment variable so callers can point at a
 /// non-PATH install (e.g. `$HOME/.wasmedge/bin/wasmedge`, which is
@@ -172,6 +175,20 @@ impl Instance {
     /// Path to the loaded `.wasm` file.
     pub fn module_path(&self) -> &Path {
         &self.module_path
+    }
+
+    /// Spawn the module under WasmEdge and return a streaming
+    /// [`Runner`] whose [`Event`]s can be polled line-by-line. Used by
+    /// the Godot `ClawEngine` node so stdout can be surfaced as
+    /// signals during execution rather than only at completion.
+    ///
+    /// Errors only on failure to *spawn* the runtime. Non-zero exit of
+    /// the wasm module surfaces as `Event::Finished(code)`.
+    pub fn stream(&self, args: &[String]) -> Result<Runner> {
+        let mut cmd = Command::new(self.engine.binary());
+        cmd.arg(&self.module_path);
+        cmd.args(args);
+        Runner::spawn(cmd)
     }
 }
 
