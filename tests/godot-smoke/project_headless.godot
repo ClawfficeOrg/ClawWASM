@@ -1,13 +1,13 @@
 ; Engine configuration file.
-; Minimal Godot 4.6+ project for the ClawEngine smoke test.
-; See README.md for setup instructions.
+; Headless CI variant — main scene points to main_headless.tscn.
+; Used by .github/workflows/ci.yml godot-smoke job.
 
 config_version=5
 
 [application]
 
 config/name="clawasm-smoke"
-run/main_scene="res://main.tscn"
+run/main_scene="res://main_headless.tscn"
 config/features=PackedStringArray("4.6")
 
 [display]
