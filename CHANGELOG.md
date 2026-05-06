@@ -6,6 +6,18 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+_(Nothing yet. The `ClawEngine` Godot node + streaming `Runner` work is
+on `feature/godot-engine-node` (PR #12) and will land in v0.3.0.)_
+
+## [v0.2.0] - 2026-04-30
+
+First real engine release: `clawasm-engine` can load a `.wasm` file from
+disk and run it under WasmEdge, capturing stdout / stderr / exit code.
+The `clawasm` host plugin builds in stub mode on a clean machine (no
+native WasmEdge install required for `cargo check`/`clippy`). Adds the
+autonomous-agent substrate (AGENTS.md, Superpowers skills, Ralph loop)
+and the full CI/CD pipeline.
+
 ### Added
 - **`clawasm-engine` v0.2.0 MVP.** Real `Instance::run` implementation
   (subprocess to the `wasmedge` CLI) with stdout / stderr / exit-code
@@ -74,4 +86,5 @@ Initial developer release. Snapshot before the Godot 4 migration.
 - CI hardening: WasmEdge tarball install pinned, `wasm32-wasip1` target,
   isolated `examples/hello-wasm` build via `--manifest-path` (#5).
 
+[v0.2.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.2.0
 [v0.1.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.1.0
