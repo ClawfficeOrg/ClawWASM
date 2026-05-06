@@ -6,7 +6,15 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-_(Nothing yet.)_
+### Added
+- **Headless Godot CI job** (`ci.yml` `godot-smoke`). Runs on `ubuntu-latest`:
+  installs WasmEdge 0.14.1, downloads Godot 4.6.2, builds the `clawasm`
+  cdylib and `hello-wasm.wasm`, lays out the smoke project, and asserts
+  `[wasm] hello-wasm` + `[wasm] exit 0` in the output. Resolves Q2 from
+  `ralph/PLAN.md`.
+- `tests/godot-smoke/main_headless.gd` + `main_headless.tscn` +
+  `project_headless.godot` — headless-CI variants that call
+  `get_tree().quit()` so Godot exits cleanly.
 
 ## [v0.3.0] - 2026-05-06
 

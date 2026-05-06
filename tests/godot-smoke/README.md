@@ -2,11 +2,11 @@
 
 This is a manual end-to-end check that the `ClawEngine` node loads in
 Godot 4 and successfully runs `examples/hello-wasm` under WasmEdge.
-There is **no CI runner yet** (Q2 in `ralph/PLAN.md`).
+A **CI runner** is now wired in `ci.yml` (`godot-smoke` job).
 
 ## Prerequisites
 
-- Godot 4.2 or newer.
+- Godot 4.6 or newer.
 - WasmEdge 0.14.x installed (the official installer drops it in
   `$HOME/.wasmedge`).
 - A `release` build of the `clawasm` cdylib (step 1).
