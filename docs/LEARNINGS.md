@@ -85,6 +85,25 @@ Wiring `ClawEngine` exposed two godot-rust 0.5 quirks:
 owned strings. Catching this at compile time saved a confusing runtime
 signal panic later. Surface in any future Rust→GDScript glue.
 
+### 2026-05-06 — Homebrew `rustc` shadows rustup shims when cross-compiling to `wasm32-wasip1`
+
+On macOS with Homebrew Rust installed, `/opt/homebrew/bin/rustc` appears earlier
+in `$PATH` than `~/.cargo/bin/rustc` (the rustup shim). Running `cargo build
+--target wasm32-wasip1` then fails with "can't find crate for `std`" even though
+`rustup target list --installed` shows `wasm32-wasip1` present. Fix: set
+`RUSTC=~/.cargo/bin/rustc` explicitly, or ensure `~/.cargo/bin` comes before
+Homebrew entries in `$PATH`. CI is unaffected (dtolnay action, no Homebrew Rust).
+Document in any contributor setup guide. PR #12.
+
+### 2026-05-06 — Godot headless requires `.godot/extension_list.cfg` to load GDExtensions
+
+`Godot --headless --path <project>` skips the editor startup that normally writes
+`.godot/extension_list.cfg`; without it no GDExtension loads at runtime, so native
+classes like `ClawEngine` are undefined and GDScript parse fails. Fix: create
+`.godot/extension_list.cfg` manually (one `res://` path per line) before the
+headless run, or open the project once in the GUI so Godot writes the file.
+Relevant for any future CI headless Godot job that loads native extensions. PR #12.
+
 ### 2026-04-30 — `sh -c "single-cmd"` forks on Linux, execs on macOS
 
 The `Runner::stop` test was green on macOS and red on Linux. Cause:
@@ -93,6 +112,18 @@ pattern and `exec`s into `sleep`, so killing the shell PID kills the
 only process. Linux's `bash` always forks `sleep` as a child; killing
 the shell PID leaves `sleep` orphaned holding the stdout pipe's write
 end open, which deadlocks the reader threads and the test times out at
-30s. Fix: invoke `sleep` directly (`Command::new("sleep")`). General
+Fix: invoke `sleep` directly (`Command::new("sleep")`). General
 lesson: when a test relies on `Child::kill()` semantics, never wrap
 the command in a shell unless you explicitly `exec` inside it. PR #12.
+
+### 2026-05-06 — `ClawEngine` Godot smoke GREEN on macOS (Godot 4.6.2, godot-rust 0.5.2)
+
+Manual headless smoke on macOS (arm64, Godot 4.6.2.stable, WasmEdge 0.14.1):
+godot-rust 0.5.2 initialises correctly ("Initialize godot-rust (API v4.6.stable)"),
+`ClawEngine` registers as a class, `register_module` resolves the `res://` path,
+`start` spawns WasmEdge, `stdout_line` fires with `"hello-wasm"`, and `finished`
+fires with exit code 0. Required two environment steps not in the original runbook:
+(1) set `WASMEDGE_BIN` to `$HOME/.wasmedge/bin/wasmedge` (not on Godot's PATH),
+(2) pre-create `.godot/extension_list.cfg` (see entry above). Both caveats are
+now documented in `tests/godot-smoke/README.md`. Linux smoke still pending.
+PR #12.

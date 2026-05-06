@@ -12,13 +12,17 @@ There is **no CI runner yet** (Q2 in `ralph/PLAN.md`).
 - A `release` build of the `clawasm` cdylib (step 1).
 - A `wasm32-wasip1` build of `examples/hello-wasm` (step 2).
 
+> **macOS + Homebrew note:** if Homebrew's Rust is installed,
+> `/opt/homebrew/bin/rustc` appears before the rustup shim in `$PATH`
+> and the wasm build will fail with "can't find crate for `std`". Fix:
+> prefix step 2 with `RUSTC=~/.cargo/bin/rustc` or ensure
+> `~/.cargo/bin` is first in `$PATH`. See `docs/LEARNINGS.md` 2026-05-06.
+
 ## Steps
 
 ### 1. Build the host cdylib
 
-```sh
-cargo build -p clawasm --release
-```
+    cargo build -p clawasm --release
 
 Produces, depending on your platform:
 
@@ -28,41 +32,78 @@ Produces, depending on your platform:
 
 ### 2. Build the wasm module
 
-```sh
-cargo build --manifest-path examples/hello-wasm/Cargo.toml \
-  --target wasm32-wasip1 --release
-```
+    RUSTC=~/.cargo/bin/rustc \
+      cargo build --manifest-path examples/hello-wasm/Cargo.toml \
+        --target wasm32-wasip1 --release
 
 Produces `examples/hello-wasm/target/wasm32-wasip1/release/hello-wasm.wasm`.
 
 ### 3. Lay out the smoke project
 
-Create a fresh Godot project directory and copy in:
+Use the checked-in scaffold (copy into a temporary directory):
 
-```
-my-clawasm-smoke/
-├── project.godot                   # any 4.2+ project, main scene = main.tscn
-├── clawasm.gdextension             # copy from repo root
-├── addons/clawasm/
-│   └── libclawasm.{dylib,so,dll}   # from step 1
-├── modules/
-│   └── hello-wasm.wasm             # from step 2
-├── main.tscn                       # a Node scene with main.gd attached
-└── main.gd                         # copy from this directory
-```
+    mkdir -p /tmp/clawasm-smoke/addons/clawasm /tmp/clawasm-smoke/modules
+    cp target/release/libclawasm.dylib  /tmp/clawasm-smoke/addons/clawasm/
+    cp examples/hello-wasm/target/wasm32-wasip1/release/hello-wasm.wasm \
+       /tmp/clawasm-smoke/modules/
+    cp clawasm.gdextension              /tmp/clawasm-smoke/
+    cp tests/godot-smoke/project.godot  /tmp/clawasm-smoke/
+    cp tests/godot-smoke/main.tscn      /tmp/clawasm-smoke/
 
-### 4. Run
+For the main script use the headless variant (calls `get_tree().quit()`):
 
-Open the project in Godot, hit Play. Expected output:
+    cat tests/godot-smoke/main.gd | \
+      sed 's/^func _on_finished.*$/&\n\tget_tree().quit(code)/' \
+      > /tmp/clawasm-smoke/main.gd
 
-```
-[wasm] hello, ClawWASM!
-[wasm] exit 0
-```
+Or write it manually — add `get_tree().quit(code)` at the end of
+`_on_finished` and `get_tree().quit(1)` at the end of `_on_failed`.
 
-If you see `ClawEngine::start: spawn failed: ...` instead, WasmEdge is
-not on `$PATH` — either call `engine.set_wasmedge_binary("/abs/path/to/wasmedge")`
-in `_ready()` or export `WASMEDGE_BIN` before launching Godot.
+The final layout:
+
+    /tmp/clawasm-smoke/
+    ├── .godot/extension_list.cfg       # step 4 — headless only
+    ├── project.godot
+    ├── clawasm.gdextension
+    ├── addons/clawasm/
+    │   └── libclawasm.dylib
+    ├── modules/
+    │   └── hello-wasm.wasm
+    ├── main.tscn
+    └── main.gd
+
+### 4. Pre-create the extension list (headless only)
+
+When running headlessly Godot skips the editor startup that normally
+writes `.godot/extension_list.cfg`. Without that file no GDExtension
+loads, so `ClawEngine` is undefined and GDScript parse fails.
+
+    mkdir -p /tmp/clawasm-smoke/.godot
+    echo 'res://clawasm.gdextension' > /tmp/clawasm-smoke/.godot/extension_list.cfg
+
+Skip this step if you open the project in the Godot GUI editor — the
+editor writes the file automatically on first open.
+
+### 5. Run
+
+**GUI (interactive):** Open `/tmp/clawasm-smoke` in Godot, hit Play.
+
+**Headless (automated):**
+
+    WASMEDGE_BIN="$HOME/.wasmedge/bin/wasmedge" \
+      /Applications/Godot.app/Contents/MacOS/Godot \
+      --headless --path /tmp/clawasm-smoke
+
+Expected output (headless):
+
+    Initialize godot-rust (API v4.6.stable.official, ...)
+    ...
+    ClawEngine: registered module /tmp/clawasm-smoke/modules/hello-wasm.wasm
+    [wasm] hello-wasm
+    [wasm] exit 0
+
+If you see `ClawEngine::start: spawn failed: ...`, WasmEdge is not on
+`$PATH` — set `WASMEDGE_BIN` as above or export it before launching Godot.
 
 ## What this proves
 
@@ -72,11 +113,19 @@ in `_ready()` or export `WASMEDGE_BIN` before launching Godot.
 - `start` spawns WasmEdge and streams `stdout_line` signals on the main thread.
 - `finished` fires exactly once, after the last line of output.
 
+## Smoke results
+
+| Date | Platform | Godot | godot-rust | WasmEdge | Result |
+| --- | --- | --- | --- | --- | --- |
+| 2026-05-06 | macOS arm64 | 4.6.2 | 0.5.2 | 0.14.1 | ✅ PASS |
+| — | Linux x86_64 | — | — | — | ⏳ pending |
+
 ## Troubleshooting
 
 | Symptom | Likely cause |
 | --- | --- |
 | `Can't open dynamic library` | Wrong arch (`x86_64` vs `arm64`) or missing rpath. Rebuild release on the same host. |
-| `ClawEngine` not found | `clawasm.gdextension` not loaded; check *Project > Project Settings > GDExtensions*. |
-| No output, no error | WasmEdge wrote to stderr and your guest doesn't `println!`. Connect `stderr_line` too. |
+| `ClawEngine` not found (GDScript parse error) | `.godot/extension_list.cfg` missing (headless), or extension not loaded in editor. |
+| No output, no error | WasmEdge wrote to stderr; connect `stderr_line` too. |
+| `can't find crate for std` during wasm build | Homebrew `rustc` shadowing rustup; set `RUSTC=~/.cargo/bin/rustc`. |
 | Hung after `start` | The wasm module loops forever. Call `engine.stop()` from a button or signal. |
