@@ -51,7 +51,7 @@ Integration / E2E tests
 - [ ] Wasm build succeeds for wasm32-wasi
 - [ ] Wasm runtime smoke test with WasmEdge (if available in CI)
 - [ ] CHANGELOG updated for user-facing changes
-- [ ] README updated if usage or API changed
+- [ ] README updated if usage, API, or install steps changed (**required**, not optional — see AGENTS.md rule 8)
 
 ## Release & changelog guidelines
 - Follow semantic versioning (semver.org).
