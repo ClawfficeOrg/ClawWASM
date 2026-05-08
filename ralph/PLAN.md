@@ -10,37 +10,25 @@ WasmEdge embedding once bindings stabilise.
 eventually run llm inference and tools like ironclaw in godot wasmedge
 ## Active task
 
-### Cut v0.3.0 and open next-slice PR
+### Wire headless Godot CI smoke (this PR)
 
-`ClawEngine` PR (#12) is fully green. Acceptance criteria all met.
-Merge PR #12 → bump `clawasm` to 0.3.0 → move CHANGELOG Unreleased → v0.3.0
-→ tag → start next feature slice.
-
-**Files to touch for release commit:**
-- `clawasm/Cargo.toml` — bump `version` to `"0.3.0"`.
-- `CHANGELOG.md` — move Unreleased block → `[v0.3.0] - 2026-05-06`.
-
-**Next feature candidates (pick one for v0.4.0 slice):**
-1. Headless Godot CI smoke (wire `.godot/extension_list.cfg` trick into CI).
-2. In-process WasmEdge embedding (swap `Command` for a `wasmedge-sys`
-   binding version compatible with WasmEdge 0.14.1, if one exists).
-3. Pre-built addon bundle in `release.yml` (`addons/clawasm/` zip).
-4. ironclaw / LLM tool wiring — first GDScript API sketch.
+- **Files added/edited:**
+  - `.github/workflows/ci.yml` — new `godot-smoke` job + `GODOT_VERSION` env.
+  - `tests/godot-smoke/main_headless.gd` — headless GDScript variant.
+  - `tests/godot-smoke/main_headless.tscn` + `project_headless.godot`.
+  - `CHANGELOG.md`, `ralph/PLAN.md` — this update.
+- **Acceptance:** CI green on this branch (fmt/clippy/test/godot-smoke).
 
 ## Up next (ordered)
 
-- [ ] **Cut v0.3.0** — merge PR #12, bump `clawasm` to 0.3.0,
-      finalize CHANGELOG Unreleased → v0.3.0, tag. Linux smoke still
-      pending but can follow in a docs patch.
-- [ ] **Headless Godot CI** — add a CI job that creates
-      `.godot/extension_list.cfg`, builds the cdylib, and runs the
-      headless smoke (resolves Q2).
+- [ ] **Linux Godot smoke result** — capture the CI run result in
+      `tests/godot-smoke/README.md` smoke-results table once the
+      headless CI job goes green.
 - [ ] **Pre-built addon bundle** — ship `addons/clawasm/` zip in
-      `release.yml` so users don't need Rust toolchain (Q4).
+      `release.yml` so users don’t need Rust (Q4 from v0.3.0).
 - [ ] **In-process WasmEdge embedding** — revisit once a
       `wasmedge-sys` version compatible with WasmEdge 0.14.1 appears.
-- [ ] **ironclaw / LLM tool wiring** — first GDScript API sketch for
-      running inference tasks through a wasm module.
+- [ ] **ironclaw / LLM tool wiring** — first GDScript API sketch.
 
 ## Done this iteration block
 
@@ -50,13 +38,14 @@ Merge PR #12 → bump `clawasm` to 0.3.0 → move CHANGELOG Unreleased → v0.3.
 - [x] feat(godot): `ClawEngine` node + streaming `Runner` + smoke runbook (PR #12)
 - [x] chore(release): v0.2.0 — bumped clawasm to 0.2.0, tagged (PR #13)
 - [x] docs(smoke): headless macOS smoke GREEN — Godot 4.6.2, godot-rust 0.5.2, WasmEdge 0.14.1
+- [x] ci(godot): headless Godot 4.2.2 CI smoke job (this PR)
 
 ## Open questions
 
 - **Q1:** ~~Do we want the `with-wasmedge` CI job to be `continue-on-error`?~~
   Resolved in PR #11: now required.
-- **Q2:** Headless Godot smoke in CI — `.godot/extension_list.cfg`
-  trick now documented; CI wiring deferred to the next slice.
+- **Q2:** ~~Headless Godot smoke in CI~~ — wired in this PR;
+  `godot-smoke` job uses `.godot/extension_list.cfg` + Godot 4.2.2.
 - **Q3:** ~~Subprocess vs in-process embedding for streaming.~~ Resolved
   in this PR: streaming `Runner` uses piped subprocess + reader threads;
   public API stays stable for an in-process swap-in later.
