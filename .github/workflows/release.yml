@@ -100,6 +100,48 @@ jobs:
           mkdir -p release
           find dist -type f -exec cp {} release/ \;
           ls -lh release/
+
+      - name: Build addon bundle zip
+        run: |
+          set -e
+          TAG="${GITHUB_REF_NAME}"
+          BUNDLE_DIR="addon-bundle/addons/clawasm"
+          mkdir -p "$BUNDLE_DIR"
+
+          # gdextension manifest goes inside addons/clawasm/ so Godot
+          # auto-discovers it; paths already reference res://addons/clawasm/
+          cp clawasm.gdextension "$BUNDLE_DIR/"
+
+          # Copy each platform cdylib under its canonical name so the
+          # gdextension paths resolve out of the box.
+          find release/ -name '*.so'   | head -1 | xargs -I{} cp {} "$BUNDLE_DIR/libclawasm.so"
+          find release/ -name '*.dylib' | head -1 | xargs -I{} cp {} "$BUNDLE_DIR/libclawasm.dylib"
+          find release/ -name '*.dll'   | head -1 | xargs -I{} cp {} "$BUNDLE_DIR/clawasm.dll"
+
+          # Write a minimal drop-in README.
+          cat > "$BUNDLE_DIR/README.md" << 'MD'
+          # clawasm addon
+
+          Drop this `addons/clawasm/` folder into your Godot 4.6+ project root.
+          Godot will auto-discover `clawasm.gdextension` and register the
+          `ClawEngine` node on next load.
+
+          The correct platform binary is selected automatically:
+          - Linux x86_64  → `libclawasm.so`
+          - macOS aarch64 → `libclawasm.dylib`
+          - Windows x86_64 → `clawasm.dll`
+
+          See https://github.com/ClawfficeOrg/ClawWASM for usage docs.
+          MD
+
+          ZIP="release/clawasm-addon-${TAG}.zip"
+          (cd addon-bundle && zip -r "../${ZIP}" addons/)
+          if command -v sha256sum >/dev/null; then
+            sha256sum "$ZIP" > "${ZIP}.sha256"
+          else
+            shasum -a 256 "$ZIP" > "${ZIP}.sha256"
+          fi
+          ls -lh "$ZIP" "${ZIP}.sha256"
       - name: Extract CHANGELOG section
         id: changelog
         run: |

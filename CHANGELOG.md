@@ -6,7 +6,12 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-_(Nothing yet.)_
+### Added
+- **Pre-built addon bundle** (`clawasm-addon-vX.Y.Z.zip`) attached to every
+  GitHub Release. Contains `addons/clawasm/` with `clawasm.gdextension` and
+  all three platform cdylibs (`libclawasm.so`, `libclawasm.dylib`,
+  `clawasm.dll`). Drop the folder into a Godot 4.6+ project root — no Rust
+  toolchain required. Resolves Q4 in `ralph/PLAN.md`.
 
 ## [v0.4.0] - 2026-05-06
 
