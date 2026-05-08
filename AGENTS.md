@@ -48,7 +48,11 @@ The repository hosts:
    `docs/LEARNINGS.md` *in the same PR* that caused the discovery.
 7. **No `unwrap()` / `expect()` in library code** without a `// SAFETY:` or
    `// PANIC:` comment justifying it.
-8. **Reviews:** every PR must request review from `@CompewterTutor` (Claude /
+8. **Update `README.md`.** Any PR that adds or changes user-facing behaviour
+   (new node, new API, new install step, new release artifact) must update
+   `README.md` in the same commit. Reviewers should reject PRs where the
+   README is stale.
+9. **Reviews:** every PR must request review from `@CompewterTutor` (Claude /
    me) **and** the GPT-5.5 reviewer agent. See `.superpowers/skills/pr-review.md`.
 
 ## 3. Branch & PR conventions
