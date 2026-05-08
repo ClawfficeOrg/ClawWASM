@@ -6,12 +6,19 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+_(Nothing yet.)_
+
+## [v0.5.0] - 2026-05-08
+
+Pre-built addon bundle. Every GitHub Release now ships
+`clawasm-addon-vX.Y.Z.zip` — unzip, drop `addons/clawasm/` into your
+Godot 4.6+ project, and `ClawEngine` is ready with no Rust toolchain.
+
 ### Added
-- **Pre-built addon bundle** (`clawasm-addon-vX.Y.Z.zip`) attached to every
-  GitHub Release. Contains `addons/clawasm/` with `clawasm.gdextension` and
-  all three platform cdylibs (`libclawasm.so`, `libclawasm.dylib`,
-  `clawasm.dll`). Drop the folder into a Godot 4.6+ project root — no Rust
-  toolchain required. Resolves Q4 in `ralph/PLAN.md`.
+- `release.yml` — "Build addon bundle zip" step assembles
+  `addons/clawasm/{clawasm.gdextension, libclawasm.so, libclawasm.dylib,
+  clawasm.dll, README.md}` and attaches `clawasm-addon-v0.5.0.zip` +
+  sha256 to the GitHub Release.
 
 ## [v0.4.0] - 2026-05-06
 
@@ -149,6 +156,7 @@ Initial developer release. Snapshot before the Godot 4 migration.
 - CI hardening: WasmEdge tarball install pinned, `wasm32-wasip1` target,
   isolated `examples/hello-wasm` build via `--manifest-path` (#5).
 
+[v0.5.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.5.0
 [v0.4.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.4.0
 [v0.3.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.3.0
 [v0.2.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.2.0
