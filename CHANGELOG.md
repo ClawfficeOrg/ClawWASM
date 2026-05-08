@@ -6,15 +6,23 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+_(Nothing yet.)_
+
+## [v0.4.0] - 2026-05-06
+
+Headless Godot CI smoke. Every PR now runs `ClawEngine` end-to-end
+against Godot 4.6.2 on Linux x86_64 in CI — no manual Godot session
+needed. Both macOS arm64 and Linux x86_64 confirmed green.
+
 ### Added
-- **Headless Godot CI job** (`ci.yml` `godot-smoke`). Runs on `ubuntu-latest`:
-  installs WasmEdge 0.14.1, downloads Godot 4.6.2, builds the `clawasm`
-  cdylib and `hello-wasm.wasm`, lays out the smoke project, and asserts
-  `[wasm] hello-wasm` + `[wasm] exit 0` in the output. Resolves Q2 from
-  `ralph/PLAN.md`.
-- `tests/godot-smoke/main_headless.gd` + `main_headless.tscn` +
-  `project_headless.godot` — headless-CI variants that call
-  `get_tree().quit()` so Godot exits cleanly.
+- **`ci.yml` `godot-smoke` job** — installs WasmEdge 0.14.1 + Godot
+  4.6.2, builds the cdylib + `hello-wasm.wasm`, lays out the smoke
+  project with `.godot/extension_list.cfg`, and asserts
+  `[wasm] hello-wasm` + `[wasm] exit 0` in headless output.
+- `tests/godot-smoke/main_headless.gd` / `main_headless.tscn` /
+  `project_headless.godot` — headless-CI variants with
+  `get_tree().quit()` for clean exit.
+- Linux x86_64 smoke result recorded in `tests/godot-smoke/README.md`.
 
 ## [v0.3.0] - 2026-05-06
 
@@ -136,6 +144,7 @@ Initial developer release. Snapshot before the Godot 4 migration.
 - CI hardening: WasmEdge tarball install pinned, `wasm32-wasip1` target,
   isolated `examples/hello-wasm` build via `--manifest-path` (#5).
 
+[v0.4.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.4.0
 [v0.3.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.3.0
 [v0.2.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.2.0
 [v0.1.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.1.0

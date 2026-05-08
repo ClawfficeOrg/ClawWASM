@@ -118,7 +118,7 @@ If you see `ClawEngine::start: spawn failed: ...`, WasmEdge is not on
 | Date | Platform | Godot | godot-rust | WasmEdge | Result |
 | --- | --- | --- | --- | --- | --- |
 | 2026-05-06 | macOS arm64 | 4.6.2 | 0.5.2 | 0.14.1 | ✅ PASS |
-| — | Linux x86_64 | — | — | — | ⏳ pending |
+| 2026-05-06 | Linux x86_64 (CI) | 4.6.2 | 0.5.2 | 0.14.1 | ✅ PASS |
 
 ## Troubleshooting
 
