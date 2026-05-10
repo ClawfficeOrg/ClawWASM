@@ -53,7 +53,7 @@ theme_override_constants/separation = 4
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-placeholder_text = "/path/to/gemma-4-E2B-it-Q4_K_M.gguf"
+placeholder_text = "/path/to/google_gemma-4-E2B-it-Q4_K_M.gguf"
 tooltip_text = "Absolute filesystem path to the GGUF model file"
 
 [node name="BrowseBtn" type="Button" parent="HSplitContainer/SettingsScroll/SettingsBox/ModelRow"]
@@ -237,5 +237,7 @@ tooltip_text = "Request the inference thread to stop early"
 
 [node name="ModelFileDialog" type="FileDialog" parent="."]
 unique_name_in_owner = true
+file_mode = 0
 access = 2
+title = "Select GGUF Model File"
 filters = PackedStringArray("*.gguf ; GGUF Model Files")
