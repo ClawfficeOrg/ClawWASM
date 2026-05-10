@@ -58,11 +58,27 @@ enum LlmEvent {
 
 // ── InferenceParams (with-llama only) ─────────────────────────────────────────
 
+/// Stop strings that terminate generation even if the model doesn't mark them
+/// as EOG tokens (older llama.cpp builds may not do so for all models).
+#[cfg(feature = "with-llama")]
+const STOP_STRINGS: &[&str] = &[
+    "<end_of_turn>", // Gemma
+    "<eos>",         // generic
+    "<|endoftext|>", // GPT-style
+    "[/INST]",       // Llama-2 / Mistral instruct
+];
+
 /// All parameters needed to run one inference call, sent into the thread.
 #[cfg(feature = "with-llama")]
 struct InferenceParams {
+    /// User message. When `raw = false` this is wrapped in the chat template;
+    /// when `raw = true` this is used verbatim (caller already formatted it).
     prompt: String,
     system_prompt: String,
+    /// If true, skip template application and tokenise `prompt` as-is with
+    /// `AddBos::Always`. Used for multi-turn history where GDScript builds
+    /// the full Gemma-4 IT prompt and passes it pre-formatted.
+    raw: bool,
     n_predict: u32,
     ctx_size: u32,
     n_threads: i32,
@@ -111,7 +127,8 @@ fn run_inference(
     }
 
     tlog!(
-        "run_inference start | n_predict={} ctx={} threads={} temp={} top_p={} top_k={}",
+        "run_inference start | raw={} n_predict={} ctx={} threads={} temp={} top_p={} top_k={}",
+        params.raw,
         params.n_predict,
         params.ctx_size,
         params.n_threads,
@@ -130,6 +147,7 @@ fn run_inference(
     let InferenceParams {
         prompt,
         system_prompt,
+        raw,
         n_predict,
         ctx_size,
         n_threads,
@@ -138,31 +156,31 @@ fn run_inference(
         top_k,
     } = params;
 
-    // Build chat messages and apply the model's embedded chat template.
+    // ── Step 2/8: format prompt ────────────────────────────────────────────────
     //
-    // We clone the raw strings first because `LlamaChatMessage::new` takes
-    // ownership; the clones are only used if `apply_chat_template` fails.
-    let sys_raw = system_prompt.clone();
-    let usr_raw = prompt.clone();
-
-    tlog!("step 2/8: building chat messages");
-    let sys_msg = LlamaChatMessage::new("system".to_string(), system_prompt)
-        .context("LlamaChatMessage::new for 'system' role failed")?;
-    let usr_msg = LlamaChatMessage::new("user".to_string(), prompt)
-        .context("LlamaChatMessage::new for 'user' role failed")?;
-
-    // `apply_chat_template` calls `llama_chat_apply_template()` inside the
-    // bundled llama.cpp.  Older builds (pre-b4xxx) do not implement all Jinja2
-    // constructs used by Gemma-4's embedded template and return -1.  When that
-    // happens we fall back to the canonical Gemma-4 IT turn format, which also
-    // works for any `<start_of_turn>/<end_of_turn>` model family.
-    //
-    // Fallback path uses `AddBos::Always` so the tokeniser prepends the BOS
-    // token; the template path uses `AddBos::Never` because the template
-    // already encodes BOS.
-    tlog!("step 2/8: calling apply_chat_template (may fail on old llama.cpp)");
-    let (formatted, add_bos) = {
-        // Both error types are different so we unify them with anyhow::Error.
+    // Two paths:
+    //  raw=true  — prompt is already fully formatted by the caller (multi-turn
+    //              history case from GDScript). Use it verbatim with AddBos::Always.
+    //  raw=false — single-turn: try apply_chat_template; fall back to hand-written
+    //              Gemma-4 IT formatter if the bundled Jinja2 engine is too old.
+    let (formatted, add_bos) = if raw {
+        tlog!(
+            "step 2/8: raw mode — using pre-formatted prompt ({} bytes)",
+            prompt.len()
+        );
+        (prompt, AddBos::Always)
+    } else {
+        // Clone before moving into LlamaChatMessage (which takes ownership).
+        let sys_raw = system_prompt.clone();
+        let usr_raw = prompt.clone();
+        tlog!("step 2/8: building chat messages for template path");
+        let sys_msg = LlamaChatMessage::new("system".to_string(), system_prompt)
+            .context("LlamaChatMessage::new for 'system' role failed")?;
+        let usr_msg = LlamaChatMessage::new("user".to_string(), prompt)
+            .context("LlamaChatMessage::new for 'user' role failed")?;
+        // Older bundled Jinja2 can't parse Gemma-4's template — fall back to
+        // a hand-written Gemma-4 IT format if apply_chat_template returns -1.
+        tlog!("step 2/8: calling apply_chat_template");
         let tmpl_result: anyhow::Result<_> = model
             .chat_template(None)
             .context("model.chat_template() failed")
@@ -171,25 +189,16 @@ fn run_inference(
                     .apply_chat_template(&tmpl, &[sys_msg, usr_msg], true)
                     .context("model.apply_chat_template() failed")
             });
-
         match tmpl_result {
             Ok(s) => {
-                tlog!(
-                    "step 2/8: template applied via llama_chat_apply_template ({} bytes)",
-                    s.len()
-                );
+                tlog!("step 2/8: template OK ({} bytes)", s.len());
                 (s, AddBos::Never)
             }
             Err(e) => {
                 tlog!(
-                    "step 2/8: apply_chat_template failed ({}) -- \
-                     bundled llama.cpp Jinja2 engine too old; \
-                     using built-in Gemma-4 IT single-turn format",
+                    "step 2/8: apply_chat_template failed ({}) -- using Gemma-4 IT fallback",
                     e
                 );
-                // Gemma-4 IT canonical format.  System prompt is placed as a
-                // separate `system` turn; user turn follows; assistant prefix
-                // opens the model's reply.
                 let fallback = format!(
                     "<start_of_turn>system\n{sys}\n<end_of_turn>\n\
                      <start_of_turn>user\n{usr}\n<end_of_turn>\n\
@@ -287,6 +296,28 @@ fn run_inference(
             .with_context(|| {
                 format!("token_to_piece failed at token {} (id={})", n_cur, token.0)
             })?;
+
+        // Check for stop strings.  Older llama.cpp may not register special
+        // tokens like `<end_of_turn>` as EOG tokens, so they surface as text.
+        // Strip the stop string and any content after it, then halt cleanly.
+        let stop_hit = STOP_STRINGS.iter().find(|&&s| piece.contains(s));
+        if let Some(&stop_str) = stop_hit {
+            // Emit content that came before the stop string (if any).
+            let before = piece.split(stop_str).next().unwrap_or("").trim_end();
+            if !before.is_empty() {
+                if tx.send(LlmEvent::Token(before.to_string())).is_err() {
+                    break;
+                }
+                n_generated += 1;
+            }
+            tlog!(
+                "generation: stop string {:?} found at token {} — done",
+                stop_str,
+                n_cur
+            );
+            break;
+        }
+
         // If the receiver is gone (e.g. the node was freed), stop silently.
         if tx.send(LlmEvent::Token(piece)).is_err() {
             eprintln!("[CLLawM] receiver gone — stopping generation");
@@ -474,6 +505,7 @@ impl CLLawM {
         let params = InferenceParams {
             prompt,
             system_prompt: self.system_prompt.clone(),
+            raw: false,
             n_predict: self.n_predict,
             ctx_size: self.ctx_size,
             n_threads: self.n_threads,
@@ -561,6 +593,75 @@ impl CLLawM {
             Ok(()) => true,
             Err(e) => {
                 godot_error!("CLLawM::generate: failed to start inference: {e:#}");
+                false
+            }
+        }
+    }
+
+    /// Like `do_generate` but skips template application entirely.
+    /// `formatted_prompt` must already be a complete, tokeniser-ready string
+    /// (e.g. a full Gemma-4 IT multi-turn prompt built by GDScript).
+    /// `AddBos::Always` is used so the tokeniser prepends the BOS token.
+    fn do_generate_raw(&mut self, formatted_prompt: String) -> bool {
+        use anyhow::Context as _;
+
+        if self.rx.is_some() {
+            godot_warn!("CLLawM::generate_raw called while already running; ignoring");
+            return false;
+        }
+        if let Err(e) = self.ensure_model_loaded() {
+            godot_error!("CLLawM::generate_raw: failed to load model: {e:#}");
+            return false;
+        }
+
+        let model = self
+            .model
+            .as_ref()
+            .expect("PANIC: model must be loaded before do_generate_raw")
+            .clone();
+
+        let stop_flag = Arc::new(AtomicBool::new(false));
+        self.stop_flag = Arc::clone(&stop_flag);
+
+        godot_print!(
+            "CLLawM: starting raw inference ({} bytes prompt)",
+            formatted_prompt.len()
+        );
+
+        let params = InferenceParams {
+            prompt: formatted_prompt,
+            system_prompt: String::new(), // unused in raw mode
+            raw: true,
+            n_predict: self.n_predict,
+            ctx_size: self.ctx_size,
+            n_threads: self.n_threads,
+            temperature: self.temperature,
+            top_p: self.top_p,
+            top_k: self.top_k,
+        };
+
+        let (tx, rx) = mpsc::channel::<LlmEvent>();
+        self.rx = Some(rx);
+
+        match std::thread::Builder::new()
+            .name("clawasm-llm-inference".into())
+            .spawn(
+                move || match run_inference(model, stop_flag, tx.clone(), params) {
+                    Ok(()) => {
+                        let _ = tx.send(LlmEvent::Done);
+                    }
+                    Err(e) => {
+                        eprintln!("[CLLawM] INFERENCE ERROR: {:#}", e);
+                        let _ = tx.send(LlmEvent::Error(format!("{:#}", e)));
+                    }
+                },
+            )
+            .context("failed to spawn raw inference thread")
+        {
+            Ok(_) => true,
+            Err(e) => {
+                godot_error!("CLLawM::generate_raw: {e:#}");
+                self.rx = None;
                 false
             }
         }
@@ -677,6 +778,28 @@ impl CLLawM {
     }
 
     // ── Inference control ─────────────────────────────────────────────────────
+
+    /// Begin inference using a pre-formatted prompt string.
+    ///
+    /// Unlike `generate`, no chat template is applied — `prompt` is tokenised
+    /// verbatim with a BOS prefix.  Use this when GDScript has already built
+    /// the full multi-turn Gemma-4 IT conversation string.
+    ///
+    /// Returns `true` when inference is successfully started.
+    #[func]
+    pub fn generate_raw(&mut self, prompt: GString) -> bool {
+        #[cfg(feature = "with-llama")]
+        return self.do_generate_raw(prompt.to_string());
+        #[cfg(not(feature = "with-llama"))]
+        {
+            let _ = prompt;
+            godot_error!(
+                "CLLawM::generate_raw: node compiled without `with-llama`; \
+                 recompile clawasm with --features with-llama"
+            );
+            false
+        }
+    }
 
     /// Begin inference for `prompt`. Returns `true` when inference is
     /// successfully started.

@@ -39,7 +39,6 @@ var llm: Node  # typed as Node; will be a CLLawM at runtime
 # ── Chat state ────────────────────────────────────────────────────────────────
 
 ## All finalised messages in BBCode, appended as conversations progress.
-## Never cleared — only grows as the conversation continues.
 var _frozen: String = ""
 
 ## Tokens accumulating for the currently-streaming response.
@@ -47,6 +46,13 @@ var _streaming: String = ""
 
 ## True while the LLM is generating a response.
 var _running: bool = false
+
+## Conversation history: Array of {role: String, content: String} dicts.
+## Used to build multi-turn prompts so the model remembers the conversation.
+var _history: Array = []
+
+## Current system prompt (kept in sync with the settings panel).
+var _system_prompt: String = "You are a helpful assistant."
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 
@@ -91,9 +97,18 @@ func _on_token(token: String) -> void:
 	_render()
 
 func _on_done(_full_text: String, _exit_code: int) -> void:
+	# Strip any stop-string leakage just in case (belt and suspenders over the
+	# Rust-side stop string detection).
+	var reply := _streaming
+	for stop in ["<end_of_turn>", "<eos>", "<|endoftext|>", "[/INST]"]:
+		reply = reply.replace(stop, "")
+	reply = reply.strip_edges()
+	# Save to history so the next turn includes this exchange.
+	if not reply.is_empty():
+		_history.append({"role": "model", "content": reply})
 	# Finalise the streaming bubble into the frozen log.
 	if not _streaming.is_empty():
-		_frozen += _bubble("assistant", _streaming)
+		_frozen += _bubble("assistant", reply if not reply.is_empty() else _streaming)
 		_streaming = ""
 	_render()
 	_set_running(false)
@@ -115,16 +130,35 @@ func _on_send() -> void:
 	if llm == null:
 		_update_status("⚠ CLLawM node unavailable — see Godot error log.")
 		return
+
+	# Auto-apply settings if a model path is set but Apply wasn't clicked.
+	var path := model_path_edit.text.strip_edges()
+	if not path.is_empty() and llm.model_path().is_empty():
+		_on_apply()
+
 	prompt_edit.clear()
+	# Save user turn to history.
+	_history.append({"role": "user", "content": text})
 	_frozen += _bubble("user", text)
 	_streaming = ""
 	_render()
 	_set_running(true)
 	_update_status("Generating…")
-	if not llm.generate(text):
+
+	var ok: bool
+	if _history.size() > 1:
+		# Multi-turn: build the full Gemma-4 IT conversation and bypass the
+		# single-turn template in the Rust node.
+		var full_prompt := _build_gemma_prompt(_system_prompt, _history)
+		ok = llm.generate_raw(full_prompt)
+	else:
+		# First turn: let the Rust node apply the template (or its fallback).
+		ok = llm.generate(text)
+
+	if not ok:
 		_on_failed(
 			"generate() returned false. "
-			+ "Is a model set and the plugin built with --features with-llama?"
+			+ "Is a model loaded? Click \"Apply & Reload Model\" first."
 		)
 
 func _on_stop() -> void:
@@ -142,20 +176,41 @@ func _on_apply() -> void:
 	if llm == null:
 		_update_status("⚠ CLLawM node unavailable.")
 		return
+	_system_prompt = system_prompt_edit.text
 	llm.set_model(path)
-	llm.set_system_prompt(system_prompt_edit.text)
+	llm.set_system_prompt(_system_prompt)
 	llm.set_temperature(temp_slider.value)
 	llm.set_top_p(top_p_slider.value)
 	llm.set_top_k(int(top_k_spin.value))
 	llm.set_n_predict(int(n_predict_spin.value))
 	llm.set_n_threads(int(n_threads_spin.value))
 	llm.set_ctx_size(int(ctx_size_spin.value))
-	_update_status("✔ Settings applied. Model will load on first generate().")
+	# Changing the model resets the conversation context.
+	_history.clear()
+	_update_status("✔ Settings applied. Conversation history cleared. Model loads on first generate().")
 
 func _on_browse() -> void:
 	model_file_dialog.popup_centered_ratio(0.7)
 
 # ── Rendering ─────────────────────────────────────────────────────────────────
+
+# ── Prompt building ──────────────────────────────────────────────────────────────
+
+## Build a complete Gemma-4 IT multi-turn prompt from the conversation history.
+## BOS is prepended by the tokeniser (AddBos::Always in generate_raw).
+func _build_gemma_prompt(sys: String, history: Array) -> String:
+	var parts: PackedStringArray = PackedStringArray()
+	if not sys.is_empty():
+		parts.append("<start_of_turn>system\n" + sys + "\n<end_of_turn>\n")
+	for turn in history:
+		var role: String = turn["role"]
+		var content: String = turn["content"]
+		parts.append("<start_of_turn>" + role + "\n" + content + "\n<end_of_turn>\n")
+	# Open assistant prefix so the model continues into its reply.
+	parts.append("<start_of_turn>model\n")
+	return "".join(parts)
+
+# ── Rendering ────────────────────────────────────────────────────────────────
 
 ## Rebuild the chat log from frozen history plus any current streaming bubble.
 ## Called on every token during generation and on state transitions.
