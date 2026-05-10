@@ -36,7 +36,42 @@ project follows [Semantic Versioning](https://semver.org/).
   a `ClawBridge` GDScript autoload.
 
 ### Fixed
-- **`scripts/download-model.sh`** — two bugs squashed:
+- **`CLLawM` inference now works end-to-end with Gemma-4 E2B-IT Q4_K_M** on
+  macOS (Metal GPU offload). The `llama-cpp-2` crate's bundled Jinja2
+  evaluator is too old to process Gemma-4's embedded chat template and returns
+  `ffi error -1` from `apply_chat_template()`. Fix: the inference thread now
+  tries the crate's template path first; on any error it falls back to a
+  hand-written Gemma-4 IT turn formatter (`<start_of_turn>system/user/model`)
+  with `AddBos::Always`. The decode, sampling, and token-streaming pipeline are
+  all compatible with the bundled llama.cpp — only the Jinja2 template step
+  was broken.
+- **Step-by-step inference diagnostics** added to `run_inference` — a `tlog!`
+  macro sends progress through the existing mpsc channel (`LlmEvent::Log`) to
+  `godot_print!` on the main thread, and to `eprintln!` in the terminal. Every
+  fallible call annotated with `.context("…")` so the full anyhow chain appears
+  instead of bare `ffi error -1`.
+- **`llm-chat` window scaling on HiDPI/Retina** — three stacked bugs caused
+  the window to open at ~25% of the screen:
+  1. `stretch/mode="viewport"` renders at the fixed 1280×800 design resolution
+     and opens the OS window at that physical size — 25% on a 5K display.
+     Fixed: switched to `"canvas_items"` (UI scales to fill any window size).
+  2. `window/dpi/allow_hidpi` was set in the editor but never persisted to
+     `project.godot`. Fixed: added explicitly.
+  3. No `window/size/mode` set → window opened as a tiny floating box.
+     Fixed: `mode=2` (maximized) so it fills the screen on launch.
+- **macOS dylib code-signature guard** — `cp`-ing a new `libclawasm.dylib`
+  over a file that Godot has mmap'd invalidates the on-disk code signature;
+  the kernel then SIGKILLs any process (git, Godot) that tries to open it.
+  Fix: `scripts/build-plugin.sh` checks `pgrep -x Godot` and aborts if Godot
+  is running, then ad-hoc signs both the built and installed dylib with
+  `codesign --sign -` after every build.
+
+### Added
+- **`scripts/build-plugin.sh`** — one-shot script to build `clawasm` with
+  `--features with-llama`, ad-hoc sign the output dylib, and install it into
+  `examples/llm-chat`. Blocks if Godot is running. Supports `--release` and
+  `--example <path>` flags.
+
   1. Switched from the deprecated `huggingface-cli` to the current `hf` CLI
      (same `huggingface_hub` package; falls back to `huggingface-cli` if
      `hf` is not on `PATH`).

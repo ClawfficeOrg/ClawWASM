@@ -168,13 +168,12 @@ background-thread GDExtension work. PR feature/llm-inference.
 
 ### 2026-05-10 — llama-cpp-2 v0.1.146 bundled llama.cpp likely too old for Gemma-4 E2B
 
-`llama-cpp-2` 0.1.146 is the newest release on crates.io. Its bundled llama.cpp
-build predates Gemma-4's Per-Layer Embeddings (PLE) and hybrid attention; the
-in-process `ctx.decode()` returns non-zero (FFI -1) when processing the prompt
-batch. The system `llama-cli` binary (Homebrew / manual build) works because it
-ships a much newer llama.cpp. Two paths forward: (A) if a newer llama-cpp-sys-2
-becomes available, upgrade; (B) write a thin C++ GDExtension using godot-cpp
-that calls llama.cpp directly via CMake submodule/FetchContent, giving full
-control of the llama.cpp version. Path B is preferred long-term as it removes
-the Rust-crate indirection and makes updating llama.cpp trivial. PR feature/llm-inference.
+**Confirmed:** `llama-cpp-2` 0.1.146's bundled Jinja2 evaluator (inside
+`llama_chat_apply_template()`) cannot parse Gemma-4's embedded template and
+returns -1. **However**, `ctx.decode()`, the sampling loop, and all token
+streaming are fully compatible — the decode/inference pipeline works fine.
+The fix is a hand-written Gemma-4 IT fallback formatter that bypasses
+`apply_chat_template()` entirely. The crate does NOT need to be replaced;
+only the template step is broken. Inference with Gemma-4 E2B-IT Q4_K_M
+works end-to-end including Metal GPU offload. PR feature/llm-inference.
 
