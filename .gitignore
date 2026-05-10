@@ -9,3 +9,13 @@ Cargo.lock
 # VS Code
 .vscode/
 .DS_Store
+# Godot editor cache and generated files — entire directory
+.godot/
+# Native plugin binaries (built locally, not committed)
+examples/**/addons/**/*.dylib
+examples/**/addons/**/*.so
+examples/**/addons/**/*.dll
+# Downloaded model files
+models/
+# Misc debug / scratch files
+docs/output*.txt

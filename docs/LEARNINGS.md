@@ -177,3 +177,45 @@ The fix is a hand-written Gemma-4 IT fallback formatter that bypasses
 only the template step is broken. Inference with Gemma-4 E2B-IT Q4_K_M
 works end-to-end including Metal GPU offload. PR feature/llm-inference.
 
+### 2026-05-12 — Godot inference_done signal fires before Rust clears is_running flag
+
+When a tool call is detected in `_on_done` and `generate_raw` is called
+synchronously to continue the loop, the Rust guard immediately rejects it with
+"generate_raw called while already running; ignoring" — the signal is emitted
+before the Rust node clears its `is_running` flag.
+Fix in GDScript: `await get_tree().process_frame` before the continuation call;
+also check `_running` after the await in case the user pressed Stop during the gap.
+If fixing on the Rust side: clear `is_running = false` before emitting `inference_done`.
+
+### 2026-05-12 — Rust stop-string filtering is post-hoc stripping, not real-time halt
+
+The CLLawM stop-string list (`<end_of_turn>`, `<start_of_turn>`, etc.) strips tokens
+from the output buffer after inference completes; it does NOT call the llama.cpp
+sampler's stop-token feature to halt generation mid-stream.  As a result, Gemma-4
+produces multiple conversation "turns" before `n_predict` is exhausted, leaving
+`<start_of_turn>model\n` sequences in `_streaming`.
+GDScript mitigation: truncate `_streaming` at the first boundary token before parsing.
+Proper fix (future): pass `<end_of_turn>` to `LlamaSampler` as a stop token so
+generation actually halts.
+
+### 2026-05-12 — Template literals in system prompts teach the model wrong key names
+
+The example `{"name": "tool_name"}` in the tool-calling system prompt was interpreted
+by Gemma-4 literally: the model used `"tool_name"` as the JSON key and `"move_up"`
+as the value, so the GDScript parser (checking for `"name"`) never detected any
+tool calls and the character never moved.  Fix: always use concrete examples
+(`{"name": "move_up"}`) with real tool names; never use placeholder words that
+could be mistaken for literal key names.  The parser also now accepts `"tool_name"`
+as a fallback for robustness.
+
+### 2026-05-12 — Window.exclusive = true conflicts with sibling FileDialog popups
+
+In Godot 4, a `Window` with `exclusive = true` blocks all other exclusive children
+of the same parent from opening.  When `SettingsWindow` (exclusive) was a child of
+root AND `ModelFileDialog` was also a sibling child of root, clicking Browse while
+Settings was open produced: "Attempting to make child window exclusive, but the
+parent window already has another exclusive child."
+Fix: make `ModelFileDialog` a child of `SettingsWindow` instead of root.  As a
+sub-window of the exclusive window it opens without conflict.  General rule: place
+file dialogs as children of the window that owns their Browse button.
+

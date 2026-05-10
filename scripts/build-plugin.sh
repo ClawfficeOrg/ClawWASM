@@ -73,6 +73,17 @@ codesign --sign - --force --timestamp=none "$BUILT_DYLIB"
 codesign --verify --strict "$BUILT_DYLIB"
 echo "    Signature OK"
 
+# ── Write extension_list.cfg (needed by headless Godot; not committed to git) ──
+_write_extension_list() {
+  local project_dir="$1"
+  local cfg="$project_dir/.godot/extension_list.cfg"
+  mkdir -p "$project_dir/.godot"
+  if [[ ! -f "$cfg" ]]; then
+    echo "res://clawasm.gdextension" > "$cfg"
+    echo "    Created $cfg"
+  fi
+}
+
 # ── Install ───────────────────────────────────────────────────────────────────
 echo "==> Installing to $ADDON_DIR/$DYLIB_NAME"
 mkdir -p "$ADDON_DIR"
@@ -83,9 +94,25 @@ cp "$BUILT_DYLIB" "$ADDON_DIR/$DYLIB_NAME"
 codesign --sign - --force --timestamp=none "$ADDON_DIR/$DYLIB_NAME"
 codesign --verify --strict "$ADDON_DIR/$DYLIB_NAME"
 echo "    Destination signature OK"
+_write_extension_list "$EXAMPLE_DIR"
+
+# ── Also install to ai-character example ────────────────────────────────────
+AI_ADDON="$REPO_ROOT/examples/ai-character/addons/clawasm"
+if [[ "$EXAMPLE_DIR" != "$REPO_ROOT/examples/ai-character" ]]; then
+  echo "==> Installing to $AI_ADDON/$DYLIB_NAME"
+  mkdir -p "$AI_ADDON"
+  cp "$BUILT_DYLIB" "$AI_ADDON/$DYLIB_NAME"
+  codesign --sign - --force --timestamp=none "$AI_ADDON/$DYLIB_NAME"
+  codesign --verify --strict "$AI_ADDON/$DYLIB_NAME"
+  echo "    Also installed to $AI_ADDON"
+  _write_extension_list "$REPO_ROOT/examples/ai-character"
+fi
 
 echo ""
 echo "==> Done. You can now open Godot and load the project at:"
 echo "    $EXAMPLE_DIR"
+if [[ "$EXAMPLE_DIR" != "$REPO_ROOT/examples/ai-character" ]]; then
+  echo "    $REPO_ROOT/examples/ai-character"
+fi
 echo ""
 echo "    The CLLawM node uses the freshly built libclawasm.dylib."

@@ -74,10 +74,14 @@ func _ready() -> void:
 | `inference_done(full_text: String, exit_code: int)` | full response, 0 | After last token |
 | `inference_failed(message: String)` | error description | On model load / OOM error |
 
-### Interactive demo
+### Interactive demos
 
-See [`examples/llm-chat/`](examples/llm-chat/README.md) for a full
-streaming chat UI with a settings panel you can open directly in Godot.
+See [`examples/llm-chat/`](examples/llm-chat/README.md) for a full streaming
+chat UI with a settings panel.
+
+See [`examples/ai-character/`](examples/ai-character/README.md) for a
+tool-calling demo where the AI controls a 2D character by emitting JSON tool
+calls — move, speak, and navigate — powered by `CLLawM` and Gemma-4.
 
 ---
 
@@ -173,6 +177,7 @@ CI mirrors these plus a headless Godot 4.6.2 smoke in
 | `clawasm/src/llm_node.rs` | `CLLawM` GodotClass — native llama.cpp inference node. |
 | `examples/hello-wasm/` | Minimal `wasm32-wasip1` smoke binary. |
 | `examples/llm-chat/` | Godot 4.6 chat UI demo for `CLLawM` (streaming, settings panel). |
+| `examples/ai-character/` | Godot 4.6 tool-calling demo — AI drives a 2D character via JSON tool calls using `CLLawM`. |
 | `tests/godot-smoke/` | Headless Godot smoke project + runbook. |
 | `docs/` | Plan, TODO, guidelines, architecture, memory. |
 | `scripts/` | Build & smoke-test helpers. |

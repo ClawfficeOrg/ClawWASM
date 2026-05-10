@@ -34,6 +34,24 @@ project follows [Semantic Versioning](https://semver.org/).
 - **v0.7.0 WASM bridge plan** documented in `docs/TODO.md` — JSON-over-stdout
   protocol for routing `CLLawM` generation requests from WASM modules via
   a `ClawBridge` GDScript autoload.
+- **`examples/ai-character/`** — self-contained Godot 4.6+ project demonstrating
+  `CLLawM` **tool-calling**: the AI controls a blue-square character moving around
+  a 2D game world via JSON tool calls emitted one-per-line in its response.
+  Six tools: `move_up`, `move_down`, `move_left`, `move_right`, `get_position`,
+  `speak` (speech bubble). Tool results are injected back into the conversation
+  and generation continues (tool loop capped at `MAX_TOOL_LOOPS = 8`).
+  Layout: `HBoxContainer` — full-viewport game world (left, expands) + compact
+  chat panel docked right (~310 px, fixed). Settings (model path, sampling
+  params) live behind a ⚙ button that opens a `Window` sub-node popup.
+  System prompt is rebuilt every turn with live game-world pixel dimensions.
+  See `examples/ai-character/README.md`.
+- **`scripts/build-plugin.sh`** now also installs the signed dylib into
+  `examples/ai-character/addons/clawasm/` on every build (skipped when
+  `--example examples/ai-character` is the explicit target to avoid double-copy).
+- **`generate_raw` tool-loop continuation** deferred one frame with
+  `await get_tree().process_frame` before re-calling after `inference_done`
+  — prevents "generate_raw called while already running" because the Godot
+  signal fires before the Rust `is_running` flag is cleared.
 
 ### Fixed
 - **`CLLawM` inference now works end-to-end with Gemma-4 E2B-IT Q4_K_M** on
@@ -65,6 +83,22 @@ project follows [Semantic Versioning](https://semver.org/).
   Fix: `scripts/build-plugin.sh` checks `pgrep -x Godot` and aborts if Godot
   is running, then ad-hoc signs both the built and installed dylib with
   `codesign --sign -` after every build.
+- **`ModelFileDialog` exclusive-window conflict** — `SettingsWindow` (`exclusive = true`)
+  and a sibling `FileDialog` both trying to become exclusive children of the root
+  window caused a Godot error and a broken Browse button. Fix: moved `ModelFileDialog`
+  to be a child of `SettingsWindow` so it opens within the settings window's scope.
+- **Gemma-4 multi-turn bleed** in `ai_character.gd` — the Rust stop-string logic
+  strips special tokens post-hoc but does NOT halt generation mid-stream, so the
+  model kept producing `<end_of_turn>\n<start_of_turn>model\n` pairs until
+  `n_predict` tokens were exhausted.  `_on_done` now truncates `_streaming` at
+  the first `<end_of_turn>` / `<start_of_turn>` / `<eos>` boundary before parsing.
+- **Wrong tool-call JSON key** — the system-prompt example `{"name": "tool_name"}`
+  taught Gemma-4 to use `"tool_name"` as the literal key name, so no tool calls
+  were ever detected. Fixed: system prompt now shows concrete examples
+  (`{"name": "move_up"}`, etc.); parser also accepts `"tool_name"` as a fallback.
+- **Bare role-label leakage** (`model`, `user` appearing as chat text) after
+  `<start_of_turn>` tags were stripped — `_clean()` now skips lines whose trimmed
+  content is exactly a Gemma role label.
 
 ### Added
 - **`scripts/build-plugin.sh`** — one-shot script to build `clawasm` with

@@ -1,0 +1,17 @@
+; ClawWASM Godot 4 extension manifest — ai-character example.
+;
+; Drop the built `libclawasm.{dylib,so,dll}` into addons/clawasm/ and
+; open this project in Godot 4.6+. The CLLawM node will be available
+; immediately. See README.md for full setup instructions.
+
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = "4.6"
+
+[libraries]
+linux.debug.x86_64     = "res://addons/clawasm/libclawasm.so"
+linux.release.x86_64   = "res://addons/clawasm/libclawasm.so"
+macos.debug            = "res://addons/clawasm/libclawasm.dylib"
+macos.release          = "res://addons/clawasm/libclawasm.dylib"
+windows.debug.x86_64   = "res://addons/clawasm/clawasm.dll"
+windows.release.x86_64 = "res://addons/clawasm/clawasm.dll"
