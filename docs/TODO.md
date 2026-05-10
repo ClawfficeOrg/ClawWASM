@@ -87,7 +87,73 @@ Tasks:
 - Recommended agent assignments: sonnet for architecture review, minimax/nemotron for implementation, gpt-5-mini for docs and tests.
 - Acceptance: stable release artifacts, CI passing, documented upgrade path.
 
-## Cross-phase notes
+## v0.7.0 — WASM ↔ CLLawM bridge (JSON-over-stdout protocol)
+
+**Status:** Design locked; no code yet. Implement after v0.6.0 ships.
+
+### Motivation
+
+`CLLawM` runs inference natively in the Godot host process, while
+application logic lives in `clawasm-llm.wasm` running under `ClawEngine`.
+The bridge connects these two worlds so WASM modules can request
+generation and receive streamed tokens without any subprocess or network.
+
+### Protocol spec
+
+#### WASM → Host (stdout)
+
+WASM modules write JSON control messages to stdout, one per line, with
+a recognisable prefix:
+
+```
+{"__cllaw__":"generate","prompt":"...","id":"<uuid>","params":{...}}
+{"__cllaw__":"stop","id":"<uuid>"}
+```
+
+The `id` field is an opaque correlation key chosen by the WASM caller.
+
+#### Host → WASM (stdin or side channel)
+
+`CLLawM` emits tokens back to the WASM module via its stdin pipe (or a
+future side-channel mechanism). Each message is a JSON line:
+
+```
+{"__cllaw__":"token","id":"<uuid>","text":"..."}
+{"__cllaw__":"done","id":"<uuid>","full_text":"..."}
+{"__cllaw__":"error","id":"<uuid>","message":"..."}
+```
+
+#### GDScript autoload
+
+A `ClawBridge` autoload singleton sits between `ClawEngine` and `CLLawM`:
+
+1. Subscribes to `ClawEngine`'s `stdout_line` signal.
+2. Parses lines that begin with `{"__cllaw__":`.
+3. Dispatches `generate` / `stop` calls to the `CLLawM` node.
+4. Forwards `token_generated` / `inference_done` signals back to the
+   WASM module via the engine's stdin pipe.
+
+### Acceptance criteria
+
+- [ ] `ClawBridge` autoload implemented in GDScript.
+- [ ] Round-trip test: WASM module sends a `generate` request; receives
+      tokens back via stdin; asserts non-empty output.
+- [ ] Correlation by `id` works when two requests are in flight
+      concurrently (sequential for now; concurrent as stretch goal).
+- [ ] `docs/BRIDGE_PROTOCOL.md` written with full message schema.
+
+### Dependencies
+
+- v0.6.0 (CLLawM native inference) must be merged first.
+- `Runner::spawn` must expose a writable stdin handle (minor engine
+  addition needed).
+
+### Recommended agent assignments
+
+- Protocol design: sonnet (architecture review)
+- GDScript bridge: minimax or nemotron (implementation)
+- Tests + docs: gpt-5-mini
+
 
 - Branching & PRs: use feature branches per milestone (feature/wasm-build, feature/ws-client, feature/persistence, feature/godot-api). Open PRs for review; Sonnet should review architecture-affecting PRs.
 - Naming: do NOT rename repo without explicit confirmation from Michael. Suggestion: include a PR proposing rename to "ClaWASM" with steps (create new repo or rename via GitHub repo settings, update README, redirect links). If approved, list exact rename steps in PR description.

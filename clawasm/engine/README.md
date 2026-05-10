@@ -22,7 +22,21 @@ Subprocess invocation:
 When/if we move to in-process embedding, only the body of `Instance::run`
 needs to change. Tracked in `ralph/PLAN.md`.
 
-## Usage
+## Public API
+
+The crate exposes:
+
+- **`Engine`** — lightweight handle for locating the WasmEdge binary.
+- **`Instance`** — a loaded `.wasm` module ready to run.
+- **`Output`** — captured stdout/stderr + exit code from a completed run.
+- **`Runner`** / **`Event`** — streaming subprocess runner used by the
+  Godot `ClawEngine` node and kept for future WASM ↔ host bridge work.
+
+> **Note (v0.6.0):** `LlmConfig` and `DEFAULT_LLAMA_CLI_BIN` were removed
+> from this crate. Native LLM inference now lives in `clawasm/src/llm_node.rs`
+> and is compiled via the `llama-cpp-2` crate (enabled with
+> `--features with-llama`). See `ralph/PLAN.md` HANDOFF section.
+
 
 ```rust,no_run
 use engine::Engine;
