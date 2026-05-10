@@ -152,14 +152,29 @@ detect `hf` first (`command -v hf`) with a graceful fallback to
 `huggingface-cli`; correct the `FILENAME` prefix; strip any trailing `.gguf`
 from the `QUANT` argument defensively. PR feature/llm-inference.
 
-### 2026-05-08 — LLM stdout requires chunk-based reading, not line-based
+### 2026-05-10 — `ffi error -1` from llama-cpp-2 needs step-by-step diagnostics to pinpoint failure
 
-`llama-cli` flushes stdout after each token but tokens are not newline-
-terminated. The existing `Runner::spawn` uses `BufReader::lines()` which
-blocks until a `\n` arrives, so tokens would not appear until the model
-emitted a full line — bad UX for a streaming chat UI. Fix: added
-`Runner::spawn_chunked` which reads stdout in raw byte chunks (up to 256
-bytes per `read()` call) and emits `Event::StdoutChunk` instead of
-`Event::Stdout`. `ClawEngine` continues to use `spawn` (line-based);
-`CLLawM` uses `spawn_chunked`. Stderr stays line-based in both cases
-(llama.cpp writes stats line-by-line to stderr). PR feature/llm-inference.
+When `CLLawM` reported `ffi error -1` during inference the error came from one of
+several `ctx.decode()` / sampling calls in `run_inference` — the bare anyhow `?`
+propagation gave no context about *which* step. Fix: added a `tlog!` macro that
+sends a `LlmEvent::Log` through the existing mpsc channel (forwarded to
+`godot_print!` on the main thread) AND prints to `eprintln!` for terminal
+visibility. Every major step (1/8 through 8/8) is logged so the last printed step
+before an error identifies the culprit. Every `?` is also wrapped in `.context()`
+so the anyhow chain includes a description of the failing call. The full chain
+appears via `{:#}` in both `godot_error!` and the `eprintln!` inside the thread.
+This pattern (LlmEvent::Log channel + tlog macro) should be reused for any future
+background-thread GDExtension work. PR feature/llm-inference.
+
+### 2026-05-10 — llama-cpp-2 v0.1.146 bundled llama.cpp likely too old for Gemma-4 E2B
+
+`llama-cpp-2` 0.1.146 is the newest release on crates.io. Its bundled llama.cpp
+build predates Gemma-4's Per-Layer Embeddings (PLE) and hybrid attention; the
+in-process `ctx.decode()` returns non-zero (FFI -1) when processing the prompt
+batch. The system `llama-cli` binary (Homebrew / manual build) works because it
+ships a much newer llama.cpp. Two paths forward: (A) if a newer llama-cpp-sys-2
+becomes available, upgrade; (B) write a thin C++ GDExtension using godot-cpp
+that calls llama.cpp directly via CMake submodule/FetchContent, giving full
+control of the llama.cpp version. Path B is preferred long-term as it removes
+the Rust-crate indirection and makes updating llama.cpp trivial. PR feature/llm-inference.
+
