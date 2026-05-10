@@ -62,10 +62,12 @@ enum LlmEvent {
 /// as EOG tokens (older llama.cpp builds may not do so for all models).
 #[cfg(feature = "with-llama")]
 const STOP_STRINGS: &[&str] = &[
-    "<end_of_turn>", // Gemma
-    "<eos>",         // generic
-    "<|endoftext|>", // GPT-style
-    "[/INST]",       // Llama-2 / Mistral instruct
+    "<end_of_turn>",    // Gemma — primary turn terminator
+    "</start_of_turn>", // Gemma — alternative form some generations emit
+    "<start_of_turn>",  // Gemma — model starting a new role (always stop here)
+    "<eos>",            // generic
+    "<|endoftext|>",    // GPT-style
+    "[/INST]",          // Llama-2 / Mistral instruct
 ];
 
 /// All parameters needed to run one inference call, sent into the thread.

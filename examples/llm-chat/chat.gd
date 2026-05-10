@@ -100,7 +100,7 @@ func _on_done(_full_text: String, _exit_code: int) -> void:
 	# Strip any stop-string leakage just in case (belt and suspenders over the
 	# Rust-side stop string detection).
 	var reply := _streaming
-	for stop in ["<end_of_turn>", "<eos>", "<|endoftext|>", "[/INST]"]:
+	for stop in ["<end_of_turn>", "</start_of_turn>", "<start_of_turn>", "<eos>", "<|endoftext|>", "[/INST]"]:
 		reply = reply.replace(stop, "")
 	reply = reply.strip_edges()
 	# Save to history so the next turn includes this exchange.
