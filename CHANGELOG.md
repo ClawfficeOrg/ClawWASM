@@ -35,6 +35,16 @@ project follows [Semantic Versioning](https://semver.org/).
   protocol for routing `CLLawM` generation requests from WASM modules via
   a `ClawBridge` GDScript autoload.
 
+### Fixed
+- **`scripts/download-model.sh`** — two bugs squashed:
+  1. Switched from the deprecated `huggingface-cli` to the current `hf` CLI
+     (same `huggingface_hub` package; falls back to `huggingface-cli` if
+     `hf` is not on `PATH`).
+  2. Corrected the GGUF filename prefix from `gemma-4-E2B-it-` to
+     `google_gemma-4-E2B-it-` (matching bartowski's actual repo filenames).
+  3. Defensive `.gguf` stripping from the `QUANT` argument so both
+     `Q4_K_M` and `Q4_K_M.gguf` work.
+
 ### Removed
 - **`LlmConfig`** and `DEFAULT_LLAMA_CLI_BIN` from `clawasm-engine`
   (`clawasm/engine/src/lib.rs`). The subprocess approach is superseded by

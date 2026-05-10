@@ -140,6 +140,18 @@ Decision: `CLLawM` shells out to the `llama-cli` binary directly (same
 subprocess pattern as `ClawEngine` with `wasmedge`). The WASI-NN path can
 be revisited if/when WasmEdge ships a newer llama.cpp plugin. PR feature/llm-inference.
 
+### 2026-05-10 — `download-model.sh` had two bugs: wrong CLI binary and wrong filename prefix
+
+`huggingface-cli` has been superseded by `hf` (same `huggingface_hub` package,
+new binary name); the old binary now exits immediately with a deprecation
+warning. Additionally, bartowski's GGUF filenames use the prefix
+`google_gemma-4-E2B-it-` (matching the original model repo slug), but the
+script was constructing `gemma-4-E2B-it-` (missing `google_`), causing a
+"File not found in repository" error even after the CLI was fixed. Fix:
+detect `hf` first (`command -v hf`) with a graceful fallback to
+`huggingface-cli`; correct the `FILENAME` prefix; strip any trailing `.gguf`
+from the `QUANT` argument defensively. PR feature/llm-inference.
+
 ### 2026-05-08 — LLM stdout requires chunk-based reading, not line-based
 
 `llama-cli` flushes stdout after each token but tokens are not newline-
