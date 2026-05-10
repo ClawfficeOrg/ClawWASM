@@ -6,7 +6,29 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-_(Nothing yet.)_
+### Added
+- **`CLLawM` Godot 4 node** (`clawasm/src/llm_node.rs`). Drop into any scene;
+  exposes `set_model(path)`, `set_llama_cli(path)`, `set_system_prompt(text)`,
+  `set_n_predict(n)`, `set_ctx_size(n)`, `set_n_threads(n)`, `generate(prompt)`,
+  `stop()`, `is_running()`. Emits `token_generated(token)`,
+  `inference_done(full_text, exit_code)`, `inference_failed(message)`, and
+  `inference_stderr(line)`. Inference is delegated to the `llama-cli` binary
+  from llama.cpp (set `LLAMA_CLI_BIN` or `set_llama_cli()` if not on `$PATH`).
+  The Gemma 4 IT chat template is applied automatically.
+- **`LlmConfig`** in `clawasm-engine` (`clawasm/engine/src/lib.rs`). Holds
+  model path, sampling parameters (temp 1.0, top-p 0.95, top-k 64 — Gemma 4
+  defaults), and system prompt. `stream_generate(prompt)` builds the
+  `llama-cli` command and returns a streaming `Runner`.
+- **`Runner::spawn_chunked`** in `clawasm-engine/src/stream.rs`. Reads stdout
+  in raw byte chunks (up to 256 bytes per read) rather than lines, emitting
+  `Event::StdoutChunk`. Required for LLM token streaming where tokens are
+  flushed without trailing newlines. Stderr remains line-based.
+- **`Event::StdoutChunk(String)`** variant in the `Event` enum. `ClawEngine`
+  ignores it (silent wildcard arm); `CLLawM` consumes it.
+- **`scripts/download-model.sh`** — one-liner to pull
+  `gemma-4-E2B-it-Q4_K_M.gguf` (3.46 GB) from
+  `bartowski/google_gemma-4-E2B-it-GGUF` via `huggingface-cli`. Quant
+  selectable via first argument.
 
 ## [v0.5.0] - 2026-05-08
 

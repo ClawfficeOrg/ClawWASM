@@ -9,7 +9,18 @@ v0.6.0+ = in-process embedding, ironclaw/LLM wiring.
 eventually run llm inference and tools like ironclaw in godot wasmedge
 ## Active task
 
-### Pre-built addon bundle in `release.yml` (this PR)
+### CLLawM: Gemma 4 E2B-IT inference in Godot (this PR)
+
+- **Branch:** `feature/llm-inference`
+- **New node:** `CLLawM` — wraps `llama-cli` subprocess, streams tokens via
+  `token_generated` signal, accumulates full response in `inference_done`.
+- **Engine additions:** `LlmConfig` struct, `Runner::spawn_chunked`,
+  `Event::StdoutChunk`.
+- **Download helper:** `scripts/download-model.sh` (bartowski Q4_K_M, 3.46 GB).
+- **Why not WasmEdge WASI-NN:** WasmEdge 0.14.1's bundled llama.cpp predates
+  Gemma 4's PLE / hybrid-attention architecture. Documented in LEARNINGS.md.
+- **Acceptance:** `cargo test --workspace` green; `CLLawM` node visible in
+  Godot editor; `generate("hello")` produces streaming tokens via signals.
 
 - **File edited:** `.github/workflows/release.yml` — new "Build addon bundle
   zip" step in the `release` job. After all platform builds complete and
@@ -23,10 +34,12 @@ eventually run llm inference and tools like ironclaw in godot wasmedge
 
 ## Up next (ordered)
 
-- [ ] **Cut v0.5.0** — merge this PR, bump `clawasm` to 0.5.0, tag.
+- [ ] **Cut v0.6.0** — merge this PR, bump `clawasm` to 0.6.0, tag.
+- [ ] **Multi-turn conversation** — accumulate chat history in `CLLawM`;
+      `generate_turn(role, text)` API.
+- [ ] **ironclaw / LLM tool wiring** — first GDScript API sketch.
 - [ ] **In-process WasmEdge embedding** — revisit once a
       `wasmedge-sys` version compatible with WasmEdge 0.14.1 appears.
-- [ ] **ironclaw / LLM tool wiring** — first GDScript API sketch.
 
 ## Done this iteration block
 
@@ -38,7 +51,9 @@ eventually run llm inference and tools like ironclaw in godot wasmedge
 - [x] docs(smoke): headless macOS smoke GREEN — Godot 4.6.2, godot-rust 0.5.2, WasmEdge 0.14.1
 - [x] ci(godot): headless Godot 4.6.2 CI smoke job, both platforms green (PR #15)
 - [x] chore(release): v0.4.0 (PR #16)
-- [x] feat(release): pre-built addon bundle zip (this PR)
+- [x] feat(release): pre-built addon bundle zip (PR #17, v0.5.0)
+- [x] feat(llm): `CLLawM` node — Gemma 4 E2B-IT inference via llama-cli,
+      `LlmConfig`, `Runner::spawn_chunked`, `Event::StdoutChunk` (this PR)
 
 ## Open questions
 

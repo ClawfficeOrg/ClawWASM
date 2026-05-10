@@ -127,3 +127,27 @@ fires with exit code 0. Required two environment steps not in the original runbo
 (2) pre-create `.godot/extension_list.cfg` (see entry above). Both caveats are
 now documented in `tests/godot-smoke/README.md`. Linux smoke still pending.
 PR #12.
+
+### 2026-05-08 — WasmEdge 0.14.1 WASI-NN llama.cpp backend does not support Gemma 4 E2B
+
+Gemma 4 E2B uses Per-Layer Embeddings (PLE) and a hybrid sliding-window /
+global attention architecture added to llama.cpp well after WasmEdge 0.14.1
+shipped. bartowski's GGUF quants were built with llama.cpp b8746; WasmEdge
+0.14.1's bundled llama.cpp backend is far older and will reject or misparse
+the GGUF. As a result, the WasmEdge WASI-NN path (`--nn-preload
+default:GGUF:AUTO:...`) cannot be used for this model at our pinned version.
+Decision: `CLLawM` shells out to the `llama-cli` binary directly (same
+subprocess pattern as `ClawEngine` with `wasmedge`). The WASI-NN path can
+be revisited if/when WasmEdge ships a newer llama.cpp plugin. PR feature/llm-inference.
+
+### 2026-05-08 — LLM stdout requires chunk-based reading, not line-based
+
+`llama-cli` flushes stdout after each token but tokens are not newline-
+terminated. The existing `Runner::spawn` uses `BufReader::lines()` which
+blocks until a `\n` arrives, so tokens would not appear until the model
+emitted a full line — bad UX for a streaming chat UI. Fix: added
+`Runner::spawn_chunked` which reads stdout in raw byte chunks (up to 256
+bytes per `read()` call) and emits `Event::StdoutChunk` instead of
+`Event::Stdout`. `ClawEngine` continues to use `spawn` (line-based);
+`CLLawM` uses `spawn_chunked`. Stderr stays line-based in both cases
+(llama.cpp writes stats line-by-line to stderr). PR feature/llm-inference.

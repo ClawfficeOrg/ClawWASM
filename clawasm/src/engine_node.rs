@@ -100,6 +100,11 @@ impl INode for ClawEngine {
                 Event::Stdout(line) => {
                     self.signals().stdout_line().emit(&GString::from(&line));
                 }
+                // StdoutChunk is produced by spawn_chunked (CLLawM);
+                // ClawEngine uses spawn (line-based) so this arm is
+                // never hit in practice, but the exhaustive match
+                // requires it.
+                Event::StdoutChunk(_) => {}
                 Event::Stderr(line) => {
                     self.signals().stderr_line().emit(&GString::from(&line));
                 }
