@@ -51,6 +51,9 @@ enum LlmEvent {
     Done,
     /// Inference aborted with an error message.
     Error(String),
+    /// Diagnostic log line from the inference thread; forwarded to
+    /// godot_print! on the main thread so it appears in the Godot console.
+    Log(String),
 }
 
 // ── InferenceParams (with-llama only) ─────────────────────────────────────────
@@ -87,6 +90,7 @@ fn run_inference(
     tx: mpsc::Sender<LlmEvent>,
     params: InferenceParams,
 ) -> anyhow::Result<()> {
+    use anyhow::Context as _;
     use llama_cpp_2::{
         context::params::LlamaContextParams,
         llama_backend::LlamaBackend,
@@ -96,8 +100,30 @@ fn run_inference(
     };
     use std::num::NonZeroU32;
 
+    // Helper: send a diagnostic log via the channel AND print to stderr so
+    // it is visible even if the Godot main thread isn't draining yet.
+    macro_rules! tlog {
+        ($($arg:tt)*) => {{
+            let _msg = format!($($arg)*);
+            eprintln!("[CLLawM] {}", _msg);
+            let _ = tx.send(LlmEvent::Log(_msg));
+        }};
+    }
+
+    tlog!(
+        "run_inference start | n_predict={} ctx={} threads={} temp={} top_p={} top_k={}",
+        params.n_predict,
+        params.ctx_size,
+        params.n_threads,
+        params.temperature,
+        params.top_p,
+        params.top_k
+    );
+
     // `LlamaBackend::init()` is idempotent — safe to call from any thread.
-    let backend = LlamaBackend::init()?;
+    tlog!("step 1/8: LlamaBackend::init");
+    let backend = LlamaBackend::init().context("LlamaBackend::init failed")?;
+    tlog!("step 1/8: backend OK");
 
     // Destructure params so we can move the Strings directly into
     // LlamaChatMessage::new without cloning (it takes owned Strings).
@@ -113,32 +139,63 @@ fn run_inference(
     } = params;
 
     // Build chat messages and apply the model's embedded chat template.
-    let sys_msg = LlamaChatMessage::new("system".to_string(), system_prompt)?;
-    let usr_msg = LlamaChatMessage::new("user".to_string(), prompt)?;
-    let tmpl = model.chat_template(None)?;
+    tlog!("step 2/8: building chat messages");
+    let sys_msg = LlamaChatMessage::new("system".to_string(), system_prompt)
+        .context("LlamaChatMessage::new for 'system' role failed")?;
+    let usr_msg = LlamaChatMessage::new("user".to_string(), prompt)
+        .context("LlamaChatMessage::new for 'user' role failed")?;
+    let tmpl = model
+        .chat_template(None)
+        .context("model.chat_template() failed — model may lack an embedded template")?;
     // `add_ass = true` appends the assistant turn prefix so the model
     // continues rather than re-generating a role header.
-    let formatted = model.apply_chat_template(&tmpl, &[sys_msg, usr_msg], true)?;
+    let formatted = model
+        .apply_chat_template(&tmpl, &[sys_msg, usr_msg], true)
+        .context("model.apply_chat_template() failed")?;
+    tlog!("step 2/8: template applied ({} bytes)", formatted.len());
 
     // Tokenise (the template already inserted BOS).
-    let prompt_tokens = model.str_to_token(&formatted, AddBos::Never)?;
+    tlog!("step 3/8: tokenising prompt");
+    let prompt_tokens = model
+        .str_to_token(&formatted, AddBos::Never)
+        .context("model.str_to_token() failed")?;
     let n_prompt = prompt_tokens.len();
+    tlog!("step 3/8: {} tokens", n_prompt);
 
     // Create context.
+    tlog!(
+        "step 4/8: creating LlamaContext (ctx_size={} n_threads={})",
+        ctx_size,
+        n_threads
+    );
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(ctx_size))
         .with_n_threads(n_threads)
         .with_n_threads_batch(n_threads);
     // `ctx` borrows from both `backend` and `model` (via deref of Arc).
     // Both outlive `ctx` within this function's scope.
-    let mut ctx = model.new_context(&backend, ctx_params)?;
+    let mut ctx = model
+        .new_context(&backend, ctx_params)
+        .context("model.new_context() failed — ctx too large or llama.cpp ABI mismatch")?;
+    tlog!("step 4/8: context OK");
 
     // Decode the prompt in one batch.
     // `add_sequence` with `logits_all = false` enables logits only on the
     // last token, which is what the sampler needs.
+    tlog!("step 5/8: filling prompt batch");
     let mut batch = LlamaBatch::new(ctx_size as usize, 1);
-    batch.add_sequence(&prompt_tokens, 0, false)?;
-    ctx.decode(&mut batch)?;
+    batch
+        .add_sequence(&prompt_tokens, 0, false)
+        .context("LlamaBatch::add_sequence failed")?;
+    tlog!(
+        "step 6/8: decoding prompt batch ({} tokens) — most common failure point for new model arches",
+        n_prompt
+    );
+    ctx.decode(&mut batch).context(
+        "ctx.decode(prompt batch) failed — llama_decode returned non-zero; \
+         bundled llama.cpp is likely too old for this model architecture",
+    )?;
+    tlog!("step 6/8: prompt decode OK");
 
     // Seed the sampler from wall-clock time for non-deterministic output.
     let seed = std::time::SystemTime::now()
@@ -151,12 +208,19 @@ fn run_inference(
         LlamaSampler::temp(temperature),
         LlamaSampler::dist(seed),
     ]);
+    tlog!("step 7/8: sampler chain created (seed={})", seed);
 
     let mut n_cur = n_prompt as i32;
     let mut decoder = encoding_rs::UTF_8.new_decoder();
+    let mut n_generated: u32 = 0;
 
+    tlog!("step 8/8: generation loop (max {} tokens)", n_predict);
     for _ in 0..n_predict {
         if stop.load(Ordering::Relaxed) {
+            tlog!(
+                "generation: stop flag set — exiting early at token {}",
+                n_generated
+            );
             break;
         }
 
@@ -165,22 +229,37 @@ fn run_inference(
         sampler.accept(token);
 
         if model.is_eog_token(token) {
+            tlog!("generation: EOG at position {} — done", n_cur);
             break;
         }
 
-        let piece = model.token_to_piece(token, &mut decoder, false, None)?;
+        let piece = model
+            .token_to_piece(token, &mut decoder, false, None)
+            .with_context(|| {
+                format!("token_to_piece failed at token {} (id={})", n_cur, token.0)
+            })?;
         // If the receiver is gone (e.g. the node was freed), stop silently.
         if tx.send(LlmEvent::Token(piece)).is_err() {
+            eprintln!("[CLLawM] receiver gone — stopping generation");
             break;
         }
+        n_generated += 1;
 
         // Advance: one-token batch at the next position with logits enabled.
         batch.clear();
-        batch.add(token, n_cur, &[0i32], true)?;
+        batch
+            .add(token, n_cur, &[0i32], true)
+            .with_context(|| format!("LlamaBatch::add failed at position {}", n_cur))?;
         n_cur += 1;
-        ctx.decode(&mut batch)?;
+        ctx.decode(&mut batch).with_context(|| {
+            format!(
+                "ctx.decode(token batch) failed at token #{} position {} — llama_decode non-zero",
+                n_generated, n_cur
+            )
+        })?;
     }
 
+    tlog!("generation complete — {} tokens emitted", n_generated);
     Ok(())
 }
 
@@ -281,6 +360,7 @@ impl CLLawM {
     /// Creates a temporary `LlamaBackend` only for the duration of the
     /// load; the model is self-contained once loaded.
     fn ensure_model_loaded(&mut self) -> anyhow::Result<()> {
+        use anyhow::Context as _;
         use llama_cpp_2::{
             llama_backend::LlamaBackend,
             model::{params::LlamaModelParams, LlamaModel},
@@ -295,12 +375,22 @@ impl CLLawM {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("no model path set; call set_model() first"))?;
 
-        let backend = LlamaBackend::init()?;
-        let model = LlamaModel::load_from_file(&backend, path, &LlamaModelParams::default())?;
+        godot_print!("CLLawM: loading model from {}", path.display());
         godot_print!(
-            "CLLawM: loaded model ({} params) from {}",
+            "CLLawM: llama-cpp-2 v{} (bundled llama.cpp may not support newest model arches)",
+            env!("CARGO_PKG_VERSION")
+        );
+
+        let backend =
+            LlamaBackend::init().context("LlamaBackend::init failed during model load")?;
+        let model = LlamaModel::load_from_file(&backend, path, &LlamaModelParams::default())
+            .with_context(|| format!("LlamaModel::load_from_file failed for {:?}", path))?;
+
+        godot_print!(
+            "CLLawM: model loaded — {} params | {} vocab tokens | {} layers",
             model.n_params(),
-            path.display()
+            model.n_vocab(),
+            model.n_layer(),
         );
         self.model = Some(Arc::new(model));
         Ok(())
@@ -308,6 +398,8 @@ impl CLLawM {
 
     /// Spawn the inference thread and wire up the event channel.
     fn start_inference(&mut self, prompt: String) -> anyhow::Result<()> {
+        use anyhow::Context as _;
+
         let model = self
             .model
             .as_ref()
@@ -318,6 +410,17 @@ impl CLLawM {
         // Fresh stop flag for this generation run.
         let stop_flag = Arc::new(AtomicBool::new(false));
         self.stop_flag = Arc::clone(&stop_flag);
+
+        godot_print!(
+            "CLLawM: starting inference — prompt={:?}... n_predict={} ctx={} threads={} temp={} top_p={} top_k={}",
+            prompt.chars().take(60).collect::<String>(),
+            self.n_predict,
+            self.ctx_size,
+            self.n_threads,
+            self.temperature,
+            self.top_p,
+            self.top_k,
+        );
 
         let params = InferenceParams {
             prompt,
@@ -341,10 +444,14 @@ impl CLLawM {
                         let _ = tx.send(LlmEvent::Done);
                     }
                     Err(e) => {
-                        let _ = tx.send(LlmEvent::Error(e.to_string()));
+                        // Log the full anyhow chain to stderr immediately so it
+                        // is visible in the terminal even before the main thread drains.
+                        eprintln!("[CLLawM] INFERENCE ERROR: {:#}", e);
+                        let _ = tx.send(LlmEvent::Error(format!("{:#}", e)));
                     }
                 },
-            )?;
+            )
+            .context("failed to spawn inference thread")?;
 
         Ok(())
     }
@@ -373,9 +480,15 @@ impl CLLawM {
                     finished = true;
                 }
                 LlmEvent::Error(msg) => {
+                    // Surface the full anyhow chain in the Godot error console.
+                    godot_error!("CLLawM: inference failed — {}", msg);
                     self.signals().inference_failed().emit(&GString::from(&msg));
                     self.accumulated.clear();
                     finished = true;
+                }
+                LlmEvent::Log(line) => {
+                    // Diagnostic progress logs from the inference thread.
+                    godot_print!("[CLLawM thread] {}", line);
                 }
             }
         }
