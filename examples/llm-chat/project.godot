@@ -1,0 +1,18 @@
+; Engine configuration file.
+; Godot 4.6+ project for the CLLawM streaming-chat example.
+; See README.md for build and run instructions.
+
+config_version=5
+
+[application]
+
+config/name="CLLawM Chat"
+config/description="Streaming LLM chat demo using the CLLawM native inference node."
+run/main_scene="res://chat.tscn"
+config/features=PackedStringArray("4.6")
+
+[display]
+
+window/size/viewport_width=1100
+window/size/viewport_height=700
+window/size/resizable=true

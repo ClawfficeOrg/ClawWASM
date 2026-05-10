@@ -7,28 +7,39 @@ project follows [Semantic Versioning](https://semver.org/).
 ## Unreleased
 
 ### Added
-- **`CLLawM` Godot 4 node** (`clawasm/src/llm_node.rs`). Drop into any scene;
-  exposes `set_model(path)`, `set_llama_cli(path)`, `set_system_prompt(text)`,
-  `set_n_predict(n)`, `set_ctx_size(n)`, `set_n_threads(n)`, `generate(prompt)`,
-  `stop()`, `is_running()`. Emits `token_generated(token)`,
-  `inference_done(full_text, exit_code)`, `inference_failed(message)`, and
-  `inference_stderr(line)`. Inference is delegated to the `llama-cli` binary
-  from llama.cpp (set `LLAMA_CLI_BIN` or `set_llama_cli()` if not on `$PATH`).
-  The Gemma 4 IT chat template is applied automatically.
-- **`LlmConfig`** in `clawasm-engine` (`clawasm/engine/src/lib.rs`). Holds
-  model path, sampling parameters (temp 1.0, top-p 0.95, top-k 64 — Gemma 4
-  defaults), and system prompt. `stream_generate(prompt)` builds the
-  `llama-cli` command and returns a streaming `Runner`.
-- **`Runner::spawn_chunked`** in `clawasm-engine/src/stream.rs`. Reads stdout
-  in raw byte chunks (up to 256 bytes per read) rather than lines, emitting
-  `Event::StdoutChunk`. Required for LLM token streaming where tokens are
-  flushed without trailing newlines. Stderr remains line-based.
-- **`Event::StdoutChunk(String)`** variant in the `Event` enum. `ClawEngine`
-  ignores it (silent wildcard arm); `CLLawM` consumes it.
-- **`scripts/download-model.sh`** — one-liner to pull
-  `gemma-4-E2B-it-Q4_K_M.gguf` (3.46 GB) from
-  `bartowski/google_gemma-4-E2B-it-GGUF` via `huggingface-cli`. Quant
-  selectable via first argument.
+- **`CLLawM` Godot 4 node** (`clawasm/src/llm_node.rs`) — native in-process
+  LLM inference via the `llama-cpp-2` crate (llama.cpp baked into the cdylib).
+  Metal GPU acceleration auto-enabled on macOS via llama-cpp-sys-2's cmake;
+  no extra feature flag needed. Enabled with `--features with-llama`.
+  GDScript API: `set_model(path)`, `set_system_prompt(text)`,
+  `set_temperature(v)`, `set_top_p(v)`, `set_top_k(k)`,
+  `set_n_predict(n)`, `set_n_threads(n)`, `set_ctx_size(n)`,
+  `generate(prompt) -> bool`, `stop()`, `is_running() -> bool`.
+  Signals: `token_generated(token)`, `inference_done(full_text, exit_code)`,
+  `inference_failed(message)`. Chat template read from the GGUF's embedded
+  metadata via `model.apply_chat_template()`. Inference runs on a background
+  thread (`Arc<LlamaModel>` cached across calls, `LlamaContext`/`LlamaBatch`/
+  `LlamaSampler` created per-call, all `!Send` and thread-local). Without
+  `with-llama`, the node compiles as a safe no-op stub.
+- **`with-llama` Cargo feature** in `clawasm/Cargo.toml` — pulls in
+  `llama-cpp-2 = "0.1"`, `anyhow = "1.0"`, `encoding_rs = "0.8"` as
+  optional deps.
+- **`with-llama-build` CI job** (`.github/workflows/ci.yml`) — builds
+  `clawasm --features with-llama` on `macos-latest` with cargo/target
+  cache; `continue-on-error: true` until validated.
+- **`examples/llm-chat/`** — self-contained Godot 4.6+ project with a
+  streaming chat UI and a full settings panel (temperature, top-p, top-k,
+  max tokens, CPU threads, context window). Open in Godot, point at a
+  `.gguf` model, click Apply, and chat. See `examples/llm-chat/README.md`.
+- **v0.7.0 WASM bridge plan** documented in `docs/TODO.md` — JSON-over-stdout
+  protocol for routing `CLLawM` generation requests from WASM modules via
+  a `ClawBridge` GDScript autoload.
+
+### Removed
+- **`LlmConfig`** and `DEFAULT_LLAMA_CLI_BIN` from `clawasm-engine`
+  (`clawasm/engine/src/lib.rs`). The subprocess approach is superseded by
+  the native `llama-cpp-2` integration. `Runner::spawn_chunked` and
+  `Event::StdoutChunk` are retained for the future WASM bridge.
 
 ## [v0.5.0] - 2026-05-08
 

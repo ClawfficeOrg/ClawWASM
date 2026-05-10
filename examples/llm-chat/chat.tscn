@@ -1,0 +1,241 @@
+[gd_scene load_steps=2 format=3 uid="uid://cllawm_chat_main"]
+
+[ext_resource type="Script" path="res://chat.gd" id="1_chat"]
+
+; Root Control — fills the entire viewport via full-rect anchor preset.
+[node name="ChatRoot" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_chat")
+
+; HSplitContainer fills ChatRoot via full-rect anchors (layout_mode=1).
+[node name="HSplitContainer" type="HSplitContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+; ── Left panel: scrollable settings ─────────────────────────────────────────
+
+[node name="SettingsScroll" type="ScrollContainer" parent="HSplitContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(300, 0)
+size_flags_horizontal = 1
+
+[node name="SettingsBox" type="VBoxContainer" parent="HSplitContainer/SettingsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="SettingsTitle" type="Label" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+layout_mode = 2
+text = "⚙  Settings"
+theme_override_font_sizes/font_size = 16
+
+[node name="Sep0" type="HSeparator" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+layout_mode = 2
+
+[node name="LblModel" type="Label" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+layout_mode = 2
+text = "Model path (.gguf)"
+
+[node name="ModelRow" type="HBoxContainer" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ModelPathEdit" type="LineEdit" parent="HSplitContainer/SettingsScroll/SettingsBox/ModelRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "/path/to/gemma-4-E2B-it-Q4_K_M.gguf"
+tooltip_text = "Absolute filesystem path to the GGUF model file"
+
+[node name="BrowseBtn" type="Button" parent="HSplitContainer/SettingsScroll/SettingsBox/ModelRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "…"
+tooltip_text = "Browse for a .gguf model file"
+
+[node name="LblSysPrompt" type="Label" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+layout_mode = 2
+text = "System prompt"
+
+[node name="SystemPromptEdit" type="TextEdit" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 72)
+text = "You are a helpful assistant."
+wrap_mode = 1
+
+[node name="LblTemp" type="Label" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+layout_mode = 2
+text = "Temperature"
+tooltip_text = "Sampling temperature (0 = deterministic, 2 = creative). Gemma 4 default: 1.0"
+
+[node name="TempRow" type="HBoxContainer" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TempSlider" type="HSlider" parent="HSplitContainer/SettingsScroll/SettingsBox/TempRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 2.0
+step = 0.01
+value = 1.0
+
+[node name="TempLabel" type="Label" parent="HSplitContainer/SettingsScroll/SettingsBox/TempRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(40, 0)
+text = "1.00"
+horizontal_alignment = 2
+
+[node name="LblTopP" type="Label" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+layout_mode = 2
+text = "Top-p"
+tooltip_text = "Nucleus sampling threshold. Gemma 4 default: 0.95"
+
+[node name="TopPRow" type="HBoxContainer" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TopPSlider" type="HSlider" parent="HSplitContainer/SettingsScroll/SettingsBox/TopPRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+step = 0.01
+value = 0.95
+
+[node name="TopPLabel" type="Label" parent="HSplitContainer/SettingsScroll/SettingsBox/TopPRow"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(40, 0)
+text = "0.95"
+horizontal_alignment = 2
+
+[node name="LblTopK" type="Label" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+layout_mode = 2
+text = "Top-k"
+tooltip_text = "Top-k sampling limit. Gemma 4 default: 64"
+
+[node name="TopKSpin" type="SpinBox" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1.0
+max_value = 200.0
+step = 1.0
+value = 64.0
+
+[node name="LblNPredict" type="Label" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+layout_mode = 2
+text = "Max tokens"
+tooltip_text = "Maximum number of tokens to generate per response"
+
+[node name="NPredictSpin" type="SpinBox" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1.0
+max_value = 8192.0
+step = 1.0
+value = 512.0
+
+[node name="LblNThreads" type="Label" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+layout_mode = 2
+text = "CPU threads"
+tooltip_text = "Number of CPU threads for inference (default: 4)"
+
+[node name="NThreadsSpin" type="SpinBox" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1.0
+max_value = 64.0
+step = 1.0
+value = 4.0
+
+[node name="LblCtxSize" type="Label" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+layout_mode = 2
+text = "Context window (tokens)"
+tooltip_text = "KV-cache context size. Larger = more memory."
+
+[node name="CtxSizeSpin" type="SpinBox" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 128.0
+max_value = 32768.0
+step = 128.0
+value = 4096.0
+
+[node name="Sep1" type="HSeparator" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+layout_mode = 2
+
+[node name="ApplyBtn" type="Button" parent="HSplitContainer/SettingsScroll/SettingsBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Apply & Reload Model"
+tooltip_text = "Apply settings and reload the model on the next generate() call"
+
+; ── Right panel: chat area ────────────────────────────────────────────────────
+
+[node name="ChatBox" type="VBoxContainer" parent="HSplitContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="ChatTitle" type="Label" parent="HSplitContainer/ChatBox"]
+layout_mode = 2
+text = "💬  Chat"
+theme_override_font_sizes/font_size = 16
+
+[node name="Sep2" type="HSeparator" parent="HSplitContainer/ChatBox"]
+layout_mode = 2
+
+; ChatLog fills the remaining vertical space and auto-scrolls to new content.
+[node name="ChatLog" type="RichTextLabel" parent="HSplitContainer/ChatBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+scroll_following = true
+selection_enabled = true
+
+[node name="StatusLabel" type="Label" parent="HSplitContainer/ChatBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Ready. Set model path and click Apply."
+theme_override_font_sizes/font_size = 11
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1.0)
+
+[node name="InputRow" type="HBoxContainer" parent="HSplitContainer/ChatBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="PromptEdit" type="LineEdit" parent="HSplitContainer/ChatBox/InputRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Type a message and press Enter…"
+
+[node name="SendBtn" type="Button" parent="HSplitContainer/ChatBox/InputRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Send"
+
+[node name="StopBtn" type="Button" parent="HSplitContainer/ChatBox/InputRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Stop"
+tooltip_text = "Request the inference thread to stop early"
+
+; ── File picker (hidden until BrowseBtn is pressed) ───────────────────────────
+
+[node name="ModelFileDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+access = 2
+filters = PackedStringArray("*.gguf ; GGUF Model Files")
