@@ -88,17 +88,33 @@ fn run_inference(
     params: InferenceParams,
 ) -> anyhow::Result<()> {
     use llama_cpp_2::{
-        context::params::LlamaContextParams, llama_backend::LlamaBackend, llama_batch::LlamaBatch,
-        model::AddBos, sampling::LlamaSampler,
+        context::params::LlamaContextParams,
+        llama_backend::LlamaBackend,
+        llama_batch::LlamaBatch,
+        model::{AddBos, LlamaChatMessage},
+        sampling::LlamaSampler,
     };
     use std::num::NonZeroU32;
 
     // `LlamaBackend::init()` is idempotent — safe to call from any thread.
     let backend = LlamaBackend::init()?;
 
+    // Destructure params so we can move the Strings directly into
+    // LlamaChatMessage::new without cloning (it takes owned Strings).
+    let InferenceParams {
+        prompt,
+        system_prompt,
+        n_predict,
+        ctx_size,
+        n_threads,
+        temperature,
+        top_p,
+        top_k,
+    } = params;
+
     // Build chat messages and apply the model's embedded chat template.
-    let sys_msg = llama_cpp_2::LlamaChatMessage::new("system", &params.system_prompt)?;
-    let usr_msg = llama_cpp_2::LlamaChatMessage::new("user", &params.prompt)?;
+    let sys_msg = LlamaChatMessage::new("system".to_string(), system_prompt)?;
+    let usr_msg = LlamaChatMessage::new("user".to_string(), prompt)?;
     let tmpl = model.chat_template(None)?;
     // `add_ass = true` appends the assistant turn prefix so the model
     // continues rather than re-generating a role header.
@@ -110,9 +126,9 @@ fn run_inference(
 
     // Create context.
     let ctx_params = LlamaContextParams::default()
-        .with_n_ctx(NonZeroU32::new(params.ctx_size))
-        .with_n_threads(params.n_threads)
-        .with_n_threads_batch(params.n_threads);
+        .with_n_ctx(NonZeroU32::new(ctx_size))
+        .with_n_threads(n_threads)
+        .with_n_threads_batch(n_threads);
     // `ctx` borrows from both `backend` and `model` (via deref of Arc).
     // Both outlive `ctx` within this function's scope.
     let mut ctx = model.new_context(&backend, ctx_params)?;
@@ -120,7 +136,7 @@ fn run_inference(
     // Decode the prompt in one batch.
     // `add_sequence` with `logits_all = false` enables logits only on the
     // last token, which is what the sampler needs.
-    let mut batch = LlamaBatch::new(params.ctx_size as usize, 1);
+    let mut batch = LlamaBatch::new(ctx_size as usize, 1);
     batch.add_sequence(&prompt_tokens, 0, false)?;
     ctx.decode(&mut batch)?;
 
@@ -130,16 +146,16 @@ fn run_inference(
         .map(|d| d.subsec_nanos())
         .unwrap_or(42);
     let mut sampler = LlamaSampler::chain_simple([
-        LlamaSampler::top_k(params.top_k),
-        LlamaSampler::top_p(params.top_p, 1),
-        LlamaSampler::temp(params.temperature),
+        LlamaSampler::top_k(top_k),
+        LlamaSampler::top_p(top_p, 1),
+        LlamaSampler::temp(temperature),
         LlamaSampler::dist(seed),
     ]);
 
     let mut n_cur = n_prompt as i32;
     let mut decoder = encoding_rs::UTF_8.new_decoder();
 
-    for _ in 0..params.n_predict {
+    for _ in 0..n_predict {
         if stop.load(Ordering::Relaxed) {
             break;
         }
