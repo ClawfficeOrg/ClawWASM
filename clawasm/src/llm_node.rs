@@ -139,25 +139,74 @@ fn run_inference(
     } = params;
 
     // Build chat messages and apply the model's embedded chat template.
+    //
+    // We clone the raw strings first because `LlamaChatMessage::new` takes
+    // ownership; the clones are only used if `apply_chat_template` fails.
+    let sys_raw = system_prompt.clone();
+    let usr_raw = prompt.clone();
+
     tlog!("step 2/8: building chat messages");
     let sys_msg = LlamaChatMessage::new("system".to_string(), system_prompt)
         .context("LlamaChatMessage::new for 'system' role failed")?;
     let usr_msg = LlamaChatMessage::new("user".to_string(), prompt)
         .context("LlamaChatMessage::new for 'user' role failed")?;
-    let tmpl = model
-        .chat_template(None)
-        .context("model.chat_template() failed — model may lack an embedded template")?;
-    // `add_ass = true` appends the assistant turn prefix so the model
-    // continues rather than re-generating a role header.
-    let formatted = model
-        .apply_chat_template(&tmpl, &[sys_msg, usr_msg], true)
-        .context("model.apply_chat_template() failed")?;
-    tlog!("step 2/8: template applied ({} bytes)", formatted.len());
 
-    // Tokenise (the template already inserted BOS).
+    // `apply_chat_template` calls `llama_chat_apply_template()` inside the
+    // bundled llama.cpp.  Older builds (pre-b4xxx) do not implement all Jinja2
+    // constructs used by Gemma-4's embedded template and return -1.  When that
+    // happens we fall back to the canonical Gemma-4 IT turn format, which also
+    // works for any `<start_of_turn>/<end_of_turn>` model family.
+    //
+    // Fallback path uses `AddBos::Always` so the tokeniser prepends the BOS
+    // token; the template path uses `AddBos::Never` because the template
+    // already encodes BOS.
+    tlog!("step 2/8: calling apply_chat_template (may fail on old llama.cpp)");
+    let (formatted, add_bos) = {
+        // Both error types are different so we unify them with anyhow::Error.
+        let tmpl_result: anyhow::Result<_> = model
+            .chat_template(None)
+            .context("model.chat_template() failed")
+            .and_then(|tmpl| {
+                model
+                    .apply_chat_template(&tmpl, &[sys_msg, usr_msg], true)
+                    .context("model.apply_chat_template() failed")
+            });
+
+        match tmpl_result {
+            Ok(s) => {
+                tlog!(
+                    "step 2/8: template applied via llama_chat_apply_template ({} bytes)",
+                    s.len()
+                );
+                (s, AddBos::Never)
+            }
+            Err(e) => {
+                tlog!(
+                    "step 2/8: apply_chat_template failed ({}) -- \
+                     bundled llama.cpp Jinja2 engine too old; \
+                     using built-in Gemma-4 IT single-turn format",
+                    e
+                );
+                // Gemma-4 IT canonical format.  System prompt is placed as a
+                // separate `system` turn; user turn follows; assistant prefix
+                // opens the model's reply.
+                let fallback = format!(
+                    "<start_of_turn>system\n{sys}\n<end_of_turn>\n\
+                     <start_of_turn>user\n{usr}\n<end_of_turn>\n\
+                     <start_of_turn>model\n",
+                    sys = sys_raw,
+                    usr = usr_raw,
+                );
+                tlog!("step 2/8: fallback prompt ({} bytes)", fallback.len());
+                (fallback, AddBos::Always)
+            }
+        }
+    };
+
+    // Tokenise.
     tlog!("step 3/8: tokenising prompt");
     let prompt_tokens = model
-        .str_to_token(&formatted, AddBos::Never)
+        .str_to_token(&formatted, add_bos)
         .context("model.str_to_token() failed")?;
     let n_prompt = prompt_tokens.len();
     tlog!("step 3/8: {} tokens", n_prompt);
