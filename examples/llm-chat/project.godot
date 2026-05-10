@@ -19,4 +19,7 @@ config/features=PackedStringArray("4.6")
 
 window/size/viewport_width=1280
 window/size/viewport_height=800
+window/size/mode=2
 window/dpi/allow_hidpi=true
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
