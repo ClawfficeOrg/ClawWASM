@@ -6,6 +6,8 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## [v0.6.0] - 2026-05-12
+
 ### Added
 - **`CLLawM` Godot 4 node** (`clawasm/src/llm_node.rs`) — native in-process
   LLM inference via the `llama-cpp-2` crate (llama.cpp baked into the cdylib).
@@ -268,6 +270,7 @@ Initial developer release. Snapshot before the Godot 4 migration.
 - CI hardening: WasmEdge tarball install pinned, `wasm32-wasip1` target,
   isolated `examples/hello-wasm` build via `--manifest-path` (#5).
 
+[v0.6.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.6.0
 [v0.5.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.5.0
 [v0.4.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.4.0
 [v0.3.0]: https://github.com/ClawfficeOrg/ClawWASM/releases/tag/v0.3.0
