@@ -127,3 +127,95 @@ fires with exit code 0. Required two environment steps not in the original runbo
 (2) pre-create `.godot/extension_list.cfg` (see entry above). Both caveats are
 now documented in `tests/godot-smoke/README.md`. Linux smoke still pending.
 PR #12.
+
+### 2026-05-08 — WasmEdge 0.14.1 WASI-NN llama.cpp backend does not support Gemma 4 E2B
+
+Gemma 4 E2B uses Per-Layer Embeddings (PLE) and a hybrid sliding-window /
+global attention architecture added to llama.cpp well after WasmEdge 0.14.1
+shipped. bartowski's GGUF quants were built with llama.cpp b8746; WasmEdge
+0.14.1's bundled llama.cpp backend is far older and will reject or misparse
+the GGUF. As a result, the WasmEdge WASI-NN path (`--nn-preload
+default:GGUF:AUTO:...`) cannot be used for this model at our pinned version.
+Decision: `CLLawM` shells out to the `llama-cli` binary directly (same
+subprocess pattern as `ClawEngine` with `wasmedge`). The WASI-NN path can
+be revisited if/when WasmEdge ships a newer llama.cpp plugin. PR feature/llm-inference.
+
+### 2026-05-10 — `download-model.sh` had two bugs: wrong CLI binary and wrong filename prefix
+
+`huggingface-cli` has been superseded by `hf` (same `huggingface_hub` package,
+new binary name); the old binary now exits immediately with a deprecation
+warning. Additionally, bartowski's GGUF filenames use the prefix
+`google_gemma-4-E2B-it-` (matching the original model repo slug), but the
+script was constructing `gemma-4-E2B-it-` (missing `google_`), causing a
+"File not found in repository" error even after the CLI was fixed. Fix:
+detect `hf` first (`command -v hf`) with a graceful fallback to
+`huggingface-cli`; correct the `FILENAME` prefix; strip any trailing `.gguf`
+from the `QUANT` argument defensively. PR feature/llm-inference.
+
+### 2026-05-10 — `ffi error -1` from llama-cpp-2 needs step-by-step diagnostics to pinpoint failure
+
+When `CLLawM` reported `ffi error -1` during inference the error came from one of
+several `ctx.decode()` / sampling calls in `run_inference` — the bare anyhow `?`
+propagation gave no context about *which* step. Fix: added a `tlog!` macro that
+sends a `LlmEvent::Log` through the existing mpsc channel (forwarded to
+`godot_print!` on the main thread) AND prints to `eprintln!` for terminal
+visibility. Every major step (1/8 through 8/8) is logged so the last printed step
+before an error identifies the culprit. Every `?` is also wrapped in `.context()`
+so the anyhow chain includes a description of the failing call. The full chain
+appears via `{:#}` in both `godot_error!` and the `eprintln!` inside the thread.
+This pattern (LlmEvent::Log channel + tlog macro) should be reused for any future
+background-thread GDExtension work. PR feature/llm-inference.
+
+### 2026-05-10 — llama-cpp-2 v0.1.146 bundled llama.cpp likely too old for Gemma-4 E2B
+
+**Confirmed:** `llama-cpp-2` 0.1.146's bundled Jinja2 evaluator (inside
+`llama_chat_apply_template()`) cannot parse Gemma-4's embedded template and
+returns -1. **However**, `ctx.decode()`, the sampling loop, and all token
+streaming are fully compatible — the decode/inference pipeline works fine.
+The fix is a hand-written Gemma-4 IT fallback formatter that bypasses
+`apply_chat_template()` entirely. The crate does NOT need to be replaced;
+only the template step is broken. Inference with Gemma-4 E2B-IT Q4_K_M
+works end-to-end including Metal GPU offload. PR feature/llm-inference.
+
+### 2026-05-12 — Godot inference_done signal fires before Rust clears is_running flag
+
+When a tool call is detected in `_on_done` and `generate_raw` is called
+synchronously to continue the loop, the Rust guard immediately rejects it with
+"generate_raw called while already running; ignoring" — the signal is emitted
+before the Rust node clears its `is_running` flag.
+Fix in GDScript: `await get_tree().process_frame` before the continuation call;
+also check `_running` after the await in case the user pressed Stop during the gap.
+If fixing on the Rust side: clear `is_running = false` before emitting `inference_done`.
+
+### 2026-05-12 — Rust stop-string filtering is post-hoc stripping, not real-time halt
+
+The CLLawM stop-string list (`<end_of_turn>`, `<start_of_turn>`, etc.) strips tokens
+from the output buffer after inference completes; it does NOT call the llama.cpp
+sampler's stop-token feature to halt generation mid-stream.  As a result, Gemma-4
+produces multiple conversation "turns" before `n_predict` is exhausted, leaving
+`<start_of_turn>model\n` sequences in `_streaming`.
+GDScript mitigation: truncate `_streaming` at the first boundary token before parsing.
+Proper fix (future): pass `<end_of_turn>` to `LlamaSampler` as a stop token so
+generation actually halts.
+
+### 2026-05-12 — Template literals in system prompts teach the model wrong key names
+
+The example `{"name": "tool_name"}` in the tool-calling system prompt was interpreted
+by Gemma-4 literally: the model used `"tool_name"` as the JSON key and `"move_up"`
+as the value, so the GDScript parser (checking for `"name"`) never detected any
+tool calls and the character never moved.  Fix: always use concrete examples
+(`{"name": "move_up"}`) with real tool names; never use placeholder words that
+could be mistaken for literal key names.  The parser also now accepts `"tool_name"`
+as a fallback for robustness.
+
+### 2026-05-12 — Window.exclusive = true conflicts with sibling FileDialog popups
+
+In Godot 4, a `Window` with `exclusive = true` blocks all other exclusive children
+of the same parent from opening.  When `SettingsWindow` (exclusive) was a child of
+root AND `ModelFileDialog` was also a sibling child of root, clicking Browse while
+Settings was open produced: "Attempting to make child window exclusive, but the
+parent window already has another exclusive child."
+Fix: make `ModelFileDialog` a child of `SettingsWindow` instead of root.  As a
+sub-window of the exclusive window it opens without conflict.  General rule: place
+file dialogs as children of the window that owns their Browse button.
+

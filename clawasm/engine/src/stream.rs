@@ -34,7 +34,13 @@ use anyhow::{Context, Result};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
     /// A complete line from the child's stdout (no trailing newline).
+    /// Produced by [`Runner::spawn`] (line-based reading).
     Stdout(String),
+    /// A raw byte chunk from the child's stdout, decoded as UTF-8
+    /// (lossy). Produced by [`Runner::spawn_chunked`] (chunk-based
+    /// reading). Used for LLM inference where tokens are flushed
+    /// individually and do not end with newlines.
+    StdoutChunk(String),
     /// A complete line from the child's stderr (no trailing newline).
     Stderr(String),
     /// The child exited with the given status code. `-1` indicates the
@@ -57,6 +63,11 @@ impl Runner {
     /// Spawn `cmd` with piped stdout/stderr and start the reader and
     /// waiter threads. The supplied [`Command`]'s stdio settings are
     /// overridden — stdin is closed, stdout/stderr are captured.
+    ///
+    /// Stdout is read **line by line**; each complete line is emitted as
+    /// [`Event::Stdout`]. Use this for general-purpose wasm modules.
+    /// For LLM inference where tokens arrive without newlines, use
+    /// [`Runner::spawn_chunked`] instead.
     pub fn spawn(mut cmd: Command) -> Result<Self> {
         cmd.stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -142,6 +153,100 @@ impl Runner {
             out.push(ev);
         }
         out
+    }
+
+    /// Spawn `cmd` with piped stdout/stderr and start the reader and
+    /// waiter threads, but read stdout in **raw byte chunks** rather
+    /// than lines. Each chunk is emitted as [`Event::StdoutChunk`].
+    ///
+    /// This is the right constructor for LLM inference: llama.cpp
+    /// flushes stdout after every token, but tokens are not newline-
+    /// terminated, so line-based reading would block until the model
+    /// outputs a full line. Chunk reading yields each token as it
+    /// arrives. Stderr is still read line-by-line (llama.cpp stats).
+    pub fn spawn_chunked(mut cmd: Command) -> Result<Self> {
+        cmd.stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let mut child = cmd.spawn().context("failed to spawn child process")?;
+
+        let stdout = child.stdout.take().expect("stdout was piped above");
+        let stderr = child.stderr.take().expect("stderr was piped above");
+
+        let (tx, rx) = mpsc::channel::<Event>();
+
+        // Stdout: read raw bytes so each flushed token arrives
+        // immediately without waiting for a newline.
+        let tx_out = tx.clone();
+        let stdout_thread = thread::Builder::new()
+            .name("clawasm-engine-stdout-chunked".into())
+            .spawn(move || {
+                use std::io::Read;
+                // 256-byte buffer: big enough to hold most multi-byte
+                // UTF-8 sequences but small enough to yield quickly.
+                let mut buf = [0u8; 256];
+                let mut stdout = stdout;
+                loop {
+                    match stdout.read(&mut buf) {
+                        Ok(0) => break, // EOF
+                        Ok(n) => {
+                            let chunk = String::from_utf8_lossy(&buf[..n]).into_owned();
+                            if tx_out.send(Event::StdoutChunk(chunk)).is_err() {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            })
+            .context("spawning stdout-chunked reader thread")?;
+
+        // Stderr: keep line-based (llama.cpp writes stats line-by-line).
+        let tx_err = tx.clone();
+        let stderr_thread = thread::Builder::new()
+            .name("clawasm-engine-stderr-chunked".into())
+            .spawn(move || {
+                let reader = BufReader::new(stderr);
+                for line in reader.lines().map_while(Result::ok) {
+                    if tx_err.send(Event::Stderr(line)).is_err() {
+                        break;
+                    }
+                }
+            })
+            .context("spawning stderr reader thread (chunked)")?;
+
+        let child = Arc::new(Mutex::new(Some(child)));
+        let running = Arc::new(AtomicBool::new(true));
+
+        let child_for_wait = Arc::clone(&child);
+        let running_for_wait = Arc::clone(&running);
+        let waiter = thread::Builder::new()
+            .name("clawasm-engine-waiter-chunked".into())
+            .spawn(move || {
+                let _ = stdout_thread.join();
+                let _ = stderr_thread.join();
+                let event = {
+                    let mut guard = child_for_wait.lock().expect("child mutex");
+                    match guard.as_mut() {
+                        Some(child) => match child.wait() {
+                            Ok(status) => Event::Finished(status.code().unwrap_or(-1)),
+                            Err(e) => Event::Failed(format!("wait failed: {e}")),
+                        },
+                        None => Event::Finished(-1),
+                    }
+                };
+                child_for_wait.lock().expect("child mutex").take();
+                running_for_wait.store(false, Ordering::SeqCst);
+                let _ = tx.send(event);
+            })
+            .context("spawning waiter thread (chunked)")?;
+
+        Ok(Self {
+            rx,
+            child,
+            running,
+            waiter: Some(waiter),
+        })
     }
 
     /// Block until the next event is available (test/debug helper).

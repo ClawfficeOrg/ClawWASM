@@ -240,3 +240,30 @@ jobs:
             perf
             style
             revert
+
+  # Build clawasm with native llama.cpp on macOS to catch compile errors.
+  # Metal GPU is auto-enabled via the cmake build inside llama-cpp-sys-2.
+  # First build compiles llama.cpp from source (~2 min); subsequent runs
+  # are fast via the cargo/target cache.
+  # continue-on-error: true until the job is validated as stable in CI.
+  with-llama-build:
+    name: clawasm --features with-llama (macOS)
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-cargo-with-llama-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: macos-cargo-with-llama-
+      # cmake and clang are required by llama-cpp-sys-2's build script.
+      # Both ship with the Xcode toolchain on macos-latest runners.
+      - name: Verify cmake available
+        run: cmake --version
+      - name: Build clawasm with llama.cpp
+        run: cargo build -p clawasm --features with-llama

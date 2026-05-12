@@ -5,9 +5,11 @@ gateway inside a WASM sandbox. Lets Clawffice-Space nodes run on
 WASM-capable targets (Godot host, SteamDeck, consoles) without Docker or
 Podman.
 
-> **Status: v0.5.0.** `ClawEngine` node is live — drop it into any Godot
-> 4.6+ scene and stream stdout/stderr from a WasmEdge subprocess into
-> GDScript signals. Pre-built addon bundles ship with every release.
+> **Status: v0.5.0 → v0.6.0 in progress.** `ClawEngine` node is live — drop
+> it into any Godot 4.6+ scene and stream stdout/stderr from a WasmEdge
+> subprocess into GDScript signals. `CLLawM` node adds native in-process LLM
+> inference via llama.cpp (Metal on macOS, requires `--features with-llama`).
+> Pre-built addon bundles ship with every release.
 > See [`CHANGELOG.md`](CHANGELOG.md) for what's in each version and
 > [`ralph/PLAN.md`](ralph/PLAN.md) for the active workplan.
 
@@ -24,6 +26,62 @@ Podman.
    `ClawEngine` can spawn the runtime. The official installer drops it in
    `$HOME/.wasmedge/bin/wasmedge`; point `ClawEngine` at it via
    `set_wasmedge_binary(path)` or the `WASMEDGE_BIN` environment variable.
+
+---
+
+## Using `CLLawM` for LLM inference
+
+Requires building with `--features with-llama` (llama.cpp compiled in;
+Metal auto-enabled on macOS). Download a GGUF model first:
+
+```bash
+bash scripts/download-model.sh Q4_K_M   # ~3.5 GB Gemma 4 E2B-IT
+```
+
+```gdscript
+@onready var llm := CLLawM.new()
+
+func _ready() -> void:
+    add_child(llm)
+    llm.set_model("/path/to/gemma-4-E2B-it-Q4_K_M.gguf")
+    llm.set_system_prompt("You are a helpful assistant.")
+    llm.token_generated.connect(func(tok): print(tok, ""))
+    llm.inference_done.connect(func(_full, _code): print("\n--- done ---"))
+    llm.generate("Why is the sky blue?")
+```
+
+### CLLawM API surface
+
+| Method | Description |
+| --- | --- |
+| `set_model(path)` | Path to `.gguf`. Accepts `res://`, `user://`, or absolute. |
+| `set_system_prompt(text)` | System prompt prepended to every conversation turn. |
+| `set_temperature(v: float)` | Sampling temperature (Gemma 4 default: 1.0). |
+| `set_top_p(v: float)` | Nucleus sampling (Gemma 4 default: 0.95). |
+| `set_top_k(k: int)` | Top-k (Gemma 4 default: 64). |
+| `set_n_predict(n: int)` | Max tokens per response (default: 512). |
+| `set_n_threads(n: int)` | CPU threads (default: 4). |
+| `set_ctx_size(n: int)` | KV-cache size in tokens (default: 4096). |
+| `generate(prompt) -> bool` | Start inference. Returns `false` if already running or no model set. |
+| `stop()` | Request early stop; thread exits cleanly between tokens. |
+| `is_running() -> bool` | |
+
+### CLLawM signals
+
+| Signal | Args | When |
+| --- | --- | --- |
+| `token_generated(token: String)` | decoded token piece | While generating |
+| `inference_done(full_text: String, exit_code: int)` | full response, 0 | After last token |
+| `inference_failed(message: String)` | error description | On model load / OOM error |
+
+### Interactive demos
+
+See [`examples/llm-chat/`](examples/llm-chat/README.md) for a full streaming
+chat UI with a settings panel.
+
+See [`examples/ai-character/`](examples/ai-character/README.md) for a
+tool-calling demo where the AI controls a 2D character by emitting JSON tool
+calls — move, speak, and navigate — powered by `CLLawM` and Gemma-4.
 
 ---
 
@@ -116,7 +174,10 @@ CI mirrors these plus a headless Godot 4.6.2 smoke in
 | `clawasm/` | Native Godot 4 plugin (cdylib), godot-rust ≥ 0.5. |
 | `clawasm/engine/` | WasmEdge engine wrapper (feature-gated `with-wasmedge`). |
 | `clawasm/src/engine_node.rs` | `ClawEngine` GodotClass implementation. |
+| `clawasm/src/llm_node.rs` | `CLLawM` GodotClass — native llama.cpp inference node. |
 | `examples/hello-wasm/` | Minimal `wasm32-wasip1` smoke binary. |
+| `examples/llm-chat/` | Godot 4.6 chat UI demo for `CLLawM` (streaming, settings panel). |
+| `examples/ai-character/` | Godot 4.6 tool-calling demo — AI drives a 2D character via JSON tool calls using `CLLawM`. |
 | `tests/godot-smoke/` | Headless Godot smoke project + runbook. |
 | `docs/` | Plan, TODO, guidelines, architecture, memory. |
 | `scripts/` | Build & smoke-test helpers. |

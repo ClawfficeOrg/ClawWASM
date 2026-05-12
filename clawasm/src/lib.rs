@@ -13,7 +13,9 @@
 use godot::prelude::*;
 
 mod engine_node;
+mod llm_node;
 pub use engine_node::ClawEngine;
+pub use llm_node::CLLawM;
 
 /// Entry point — godot-rust v0.15 registers this automatically via the derive macro.
 struct ClawWasmExtension;

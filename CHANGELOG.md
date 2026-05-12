@@ -6,7 +6,119 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-_(Nothing yet.)_
+### Added
+- **`CLLawM` Godot 4 node** (`clawasm/src/llm_node.rs`) — native in-process
+  LLM inference via the `llama-cpp-2` crate (llama.cpp baked into the cdylib).
+  Metal GPU acceleration auto-enabled on macOS via llama-cpp-sys-2's cmake;
+  no extra feature flag needed. Enabled with `--features with-llama`.
+  GDScript API: `set_model(path)`, `set_system_prompt(text)`,
+  `set_temperature(v)`, `set_top_p(v)`, `set_top_k(k)`,
+  `set_n_predict(n)`, `set_n_threads(n)`, `set_ctx_size(n)`,
+  `generate(prompt) -> bool`, `stop()`, `is_running() -> bool`.
+  Signals: `token_generated(token)`, `inference_done(full_text, exit_code)`,
+  `inference_failed(message)`. Chat template read from the GGUF's embedded
+  metadata via `model.apply_chat_template()`. Inference runs on a background
+  thread (`Arc<LlamaModel>` cached across calls, `LlamaContext`/`LlamaBatch`/
+  `LlamaSampler` created per-call, all `!Send` and thread-local). Without
+  `with-llama`, the node compiles as a safe no-op stub.
+- **`with-llama` Cargo feature** in `clawasm/Cargo.toml` — pulls in
+  `llama-cpp-2 = "0.1"`, `anyhow = "1.0"`, `encoding_rs = "0.8"` as
+  optional deps.
+- **`with-llama-build` CI job** (`.github/workflows/ci.yml`) — builds
+  `clawasm --features with-llama` on `macos-latest` with cargo/target
+  cache; `continue-on-error: true` until validated.
+- **`examples/llm-chat/`** — self-contained Godot 4.6+ project with a
+  streaming chat UI and a full settings panel (temperature, top-p, top-k,
+  max tokens, CPU threads, context window). Open in Godot, point at a
+  `.gguf` model, click Apply, and chat. See `examples/llm-chat/README.md`.
+- **v0.7.0 WASM bridge plan** documented in `docs/TODO.md` — JSON-over-stdout
+  protocol for routing `CLLawM` generation requests from WASM modules via
+  a `ClawBridge` GDScript autoload.
+- **`examples/ai-character/`** — self-contained Godot 4.6+ project demonstrating
+  `CLLawM` **tool-calling**: the AI controls a blue-square character moving around
+  a 2D game world via JSON tool calls emitted one-per-line in its response.
+  Six tools: `move_up`, `move_down`, `move_left`, `move_right`, `get_position`,
+  `speak` (speech bubble). Tool results are injected back into the conversation
+  and generation continues (tool loop capped at `MAX_TOOL_LOOPS = 8`).
+  Layout: `HBoxContainer` — full-viewport game world (left, expands) + compact
+  chat panel docked right (~310 px, fixed). Settings (model path, sampling
+  params) live behind a ⚙ button that opens a `Window` sub-node popup.
+  System prompt is rebuilt every turn with live game-world pixel dimensions.
+  See `examples/ai-character/README.md`.
+- **`scripts/build-plugin.sh`** now also installs the signed dylib into
+  `examples/ai-character/addons/clawasm/` on every build (skipped when
+  `--example examples/ai-character` is the explicit target to avoid double-copy).
+- **`generate_raw` tool-loop continuation** deferred one frame with
+  `await get_tree().process_frame` before re-calling after `inference_done`
+  — prevents "generate_raw called while already running" because the Godot
+  signal fires before the Rust `is_running` flag is cleared.
+
+### Fixed
+- **`CLLawM` inference now works end-to-end with Gemma-4 E2B-IT Q4_K_M** on
+  macOS (Metal GPU offload). The `llama-cpp-2` crate's bundled Jinja2
+  evaluator is too old to process Gemma-4's embedded chat template and returns
+  `ffi error -1` from `apply_chat_template()`. Fix: the inference thread now
+  tries the crate's template path first; on any error it falls back to a
+  hand-written Gemma-4 IT turn formatter (`<start_of_turn>system/user/model`)
+  with `AddBos::Always`. The decode, sampling, and token-streaming pipeline are
+  all compatible with the bundled llama.cpp — only the Jinja2 template step
+  was broken.
+- **Step-by-step inference diagnostics** added to `run_inference` — a `tlog!`
+  macro sends progress through the existing mpsc channel (`LlmEvent::Log`) to
+  `godot_print!` on the main thread, and to `eprintln!` in the terminal. Every
+  fallible call annotated with `.context("…")` so the full anyhow chain appears
+  instead of bare `ffi error -1`.
+- **`llm-chat` window scaling on HiDPI/Retina** — three stacked bugs caused
+  the window to open at ~25% of the screen:
+  1. `stretch/mode="viewport"` renders at the fixed 1280×800 design resolution
+     and opens the OS window at that physical size — 25% on a 5K display.
+     Fixed: switched to `"canvas_items"` (UI scales to fill any window size).
+  2. `window/dpi/allow_hidpi` was set in the editor but never persisted to
+     `project.godot`. Fixed: added explicitly.
+  3. No `window/size/mode` set → window opened as a tiny floating box.
+     Fixed: `mode=2` (maximized) so it fills the screen on launch.
+- **macOS dylib code-signature guard** — `cp`-ing a new `libclawasm.dylib`
+  over a file that Godot has mmap'd invalidates the on-disk code signature;
+  the kernel then SIGKILLs any process (git, Godot) that tries to open it.
+  Fix: `scripts/build-plugin.sh` checks `pgrep -x Godot` and aborts if Godot
+  is running, then ad-hoc signs both the built and installed dylib with
+  `codesign --sign -` after every build.
+- **`ModelFileDialog` exclusive-window conflict** — `SettingsWindow` (`exclusive = true`)
+  and a sibling `FileDialog` both trying to become exclusive children of the root
+  window caused a Godot error and a broken Browse button. Fix: moved `ModelFileDialog`
+  to be a child of `SettingsWindow` so it opens within the settings window's scope.
+- **Gemma-4 multi-turn bleed** in `ai_character.gd` — the Rust stop-string logic
+  strips special tokens post-hoc but does NOT halt generation mid-stream, so the
+  model kept producing `<end_of_turn>\n<start_of_turn>model\n` pairs until
+  `n_predict` tokens were exhausted.  `_on_done` now truncates `_streaming` at
+  the first `<end_of_turn>` / `<start_of_turn>` / `<eos>` boundary before parsing.
+- **Wrong tool-call JSON key** — the system-prompt example `{"name": "tool_name"}`
+  taught Gemma-4 to use `"tool_name"` as the literal key name, so no tool calls
+  were ever detected. Fixed: system prompt now shows concrete examples
+  (`{"name": "move_up"}`, etc.); parser also accepts `"tool_name"` as a fallback.
+- **Bare role-label leakage** (`model`, `user` appearing as chat text) after
+  `<start_of_turn>` tags were stripped — `_clean()` now skips lines whose trimmed
+  content is exactly a Gemma role label.
+
+### Added
+- **`scripts/build-plugin.sh`** — one-shot script to build `clawasm` with
+  `--features with-llama`, ad-hoc sign the output dylib, and install it into
+  `examples/llm-chat`. Blocks if Godot is running. Supports `--release` and
+  `--example <path>` flags.
+
+  1. Switched from the deprecated `huggingface-cli` to the current `hf` CLI
+     (same `huggingface_hub` package; falls back to `huggingface-cli` if
+     `hf` is not on `PATH`).
+  2. Corrected the GGUF filename prefix from `gemma-4-E2B-it-` to
+     `google_gemma-4-E2B-it-` (matching bartowski's actual repo filenames).
+  3. Defensive `.gguf` stripping from the `QUANT` argument so both
+     `Q4_K_M` and `Q4_K_M.gguf` work.
+
+### Removed
+- **`LlmConfig`** and `DEFAULT_LLAMA_CLI_BIN` from `clawasm-engine`
+  (`clawasm/engine/src/lib.rs`). The subprocess approach is superseded by
+  the native `llama-cpp-2` integration. `Runner::spawn_chunked` and
+  `Event::StdoutChunk` are retained for the future WASM bridge.
 
 ## [v0.5.0] - 2026-05-08
 

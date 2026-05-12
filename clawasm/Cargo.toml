@@ -11,6 +11,9 @@ crate-type = ["cdylib"]
 # required) so `cargo check -p clawasm` works on a clean machine.
 default = []
 with-wasmedge = ["clawasm-engine/with-wasmedge"]
+# Enable native llama.cpp inference via the llama-cpp-2 crate. Metal is
+# auto-enabled on macOS by llama-cpp-sys-2's cmake; no extra flag needed.
+with-llama    = ["dep:llama-cpp-2", "dep:anyhow", "dep:encoding_rs"]
 
 [dependencies]
 # godot-rust v0.5 is the current Godot 4 binding crate.
@@ -20,3 +23,10 @@ godot = "0.5"
 # feature-gates `wasmedge-sys` behind `with-wasmedge`, so the host plugin
 # builds in stub mode without libwasmedge installed.
 clawasm-engine = { path = "engine", default-features = false }
+
+# Native llama.cpp inference (optional; enabled by `with-llama` feature).
+# Metal GPU acceleration is automatic on macOS via the cmake build script
+# inside llama-cpp-sys-2 — no extra feature flag is required here.
+llama-cpp-2 = { version = "0.1", optional = true }
+anyhow      = { version = "1.0", optional = true }
+encoding_rs = { version = "0.8", optional = true }
