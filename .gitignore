@@ -19,3 +19,6 @@ examples/**/addons/**/*.dll
 models/
 # Misc debug / scratch files
 docs/output*.txt
+
+# Template folder for exporting ralph and superpowers
+templates/ralph-superpowers-template/

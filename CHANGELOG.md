@@ -6,6 +6,9 @@ project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+- `templates/ralph-superpowers-template` — local, git-ignored template and `generate_template.sh` helper to bootstrap the `ralph/` loop and `.superpowers/skills/` into other repositories (supports simple {{KEY}} substitutions).
+
 ## [v0.6.0] - 2026-05-12
 
 ### Added
